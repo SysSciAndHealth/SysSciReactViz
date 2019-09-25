@@ -59,6 +59,17 @@ class SSMGraphData extends React.Component {
 	 });
   }
 
+  _handleClick = node => {
+     // Aim at node from outside it
+     const distance = 100;
+     const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
+
+     this.fg.cameraPosition(
+       { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, // new position
+         node, // lookAt ({ x, y, z })
+         3000  // ms transition duration
+        );
+      };
 
   render() {
 
@@ -70,11 +81,14 @@ class SSMGraphData extends React.Component {
         <div className="ourGraph">{this.state.headerStatus}</div>
         <div className="theGraph"><
            ForceGraph3D graphData={data} 
-		   backgroundColor={"white"}
+           ref={el => { this.fg = el; }}
+           onNodeClick={this._handleClick}
+		   backgroundColor={"darkgrey"}
            nodeAutoColorBy="shape"
-           linkDirectionalArrowLength={5}
+           linkDirectionalArrowLength={3}
+           // linkWidth={1}
            linkDirectionalArrowRelPos={1}
-           linkColor={() => 'rgba(000,000,000,1.0)'}
+           linkColor={() => 'rgba(255,0,0,1.0)'}
            linkThreeObjectExtend={true}
            linkThreeObject={link => {
             // extend link with text sprite
