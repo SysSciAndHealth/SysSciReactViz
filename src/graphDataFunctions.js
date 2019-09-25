@@ -11,14 +11,16 @@ export function getNodesByLabel(label, graphObject) {
 	// to the nodes array.  This is needed because the query we are using returns 
 	// both nodes in a relationship, but does not return nodes with no outgoing relationships.
 	// The query also doesn't return any non-connected nodes, but that should be OK.
-	var nodesAdded = {};
+    var nodesAdded = {};
     var nodes = [];
     var links = [];
+	
+    // Pull the connection info from the ,env file.  Copy and change template.env
     const neo4j = require('neo4j-driver').v1;
-    const driver = neo4j.driver('http://syssci2.edc.renci.org:7474', 
-                                 neo4j.auth.basic('neo4j', 'SSMProjectFirstPassword'));
+    const driver = neo4j.driver(process.env.REACT_APP_BOLT_URL,
+                                 neo4j.auth.basic(process.env.REACT_APP_BOLT_USER, 
+                                 process.env.REACT_APP_BOLT_PASSWORD));
     const session = driver.session();
-//  const nodeResult = session.run('MATCH (n) return n');
     const nodeResult = session.run('MATCH (n)-[r]->(a) RETURN n,type(r),a')
 
     console.log("before nodeResult");

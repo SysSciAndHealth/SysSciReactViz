@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "dotenv": "^8.1.0",
     "lodash": "^4.17.15",
     "neo4j-driver": "^1.7.6",
     "npm-install-peers": "^1.2.1",
