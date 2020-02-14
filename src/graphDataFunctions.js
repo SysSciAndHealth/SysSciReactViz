@@ -1,4 +1,4 @@
-export function getNodesByLabel(label, graphObject) {
+export function getNodes(query, graphObject, callback) {
 	var colorTable = {
 	   circle: "#8800ff",
 	   rectangle: "#0000ff",
@@ -21,16 +21,16 @@ export function getNodesByLabel(label, graphObject) {
                                  neo4j.auth.basic(process.env.REACT_APP_BOLT_USER, 
                                  process.env.REACT_APP_BOLT_PASSWORD));
     const session = driver.session();
-    const nodeResult = session.run('MATCH (n)-[r]->(a) RETURN n,type(r),a')
+    const nodeResult = session.run(query)
 
-    console.log("before nodeResult");
     var nodePromise = nodeResult.then(result => {
-    console.log("in nodeResult");
        var nRecords = result.records.length;
-       console.log(nRecords);
+       console.log("nRecords in getNodes is: " + nRecords);
        for (var i = 0; i < nRecords; i++) {
 	     // we start by looking at the first node
          var identity1 = result.records[i]._fields[0].identity;
+         var thisName = result.records[i]._fields[0].properties["name"];
+         var thisTargetName = result.records[i]._fields[2].properties["name"];
 
 		 // Have we seen this node already?
 		 if (!(identity1 in nodesAdded)) {
@@ -39,9 +39,8 @@ export function getNodesByLabel(label, graphObject) {
            var thisLabel = result.records[i]._fields[0].labels;
            var thisShape = result.records[i]._fields[0].properties["shape"];
            var thisColor = colorTable[thisShape];
-           var thisName = result.records[i]._fields[0].properties["name"];
            var thisSSMId = result.records[i]._fields[0].properties["id"];
-           var thisSourceFile = result.records[i]._fields[0].properties["sourceFile"];
+           var thisSourceFile = result.records[i]._fields[0].properties["sourcefile"];
            
            var thisNode = 
            { id: identity1, shape: thisShape, label: thisLabel, color: thisColor,
@@ -51,7 +50,6 @@ export function getNodesByLabel(label, graphObject) {
            if (thisNode.shape !== "noBorder") {
              nodes.push(thisNode);
              console.log(result.records[i]);
-             //console.log(result.records[i]._fields[0]);
            }
 		 }
 
@@ -65,9 +63,8 @@ export function getNodesByLabel(label, graphObject) {
            thisLabel = result.records[i]._fields[2].labels;
            thisShape = result.records[i]._fields[2].properties["shape"];
            thisColor = colorTable[thisShape];
-           var thisTargetName = result.records[i]._fields[2].properties["name"];
            thisSSMId = result.records[i]._fields[2].properties["id"];
-           thisSourceFile = result.records[i]._fields[2].properties["sourceFile"];
+           thisSourceFile = result.records[i]._fields[2].properties["sourcefile"];
            
            thisNode = 
            { id: identity2, shape: thisShape, label: thisLabel, color: thisColor,
@@ -94,13 +91,55 @@ export function getNodesByLabel(label, graphObject) {
        }
     session.close();
     driver.close();
-    console.log("First node to return " + nodes[0].shape);
-    // End of the result code that returns the promise
-  }).then(function(result) {
-     console.log("in node promise"); 
-	 graphObject.setNodesAndLinks(nodes, links);
-     console.log("node 0: " + graphObject.state.graph.nodes[0].shape);
+    if (typeof nodes[0] !== 'undefined') {
+       console.log("First node to return " + nodes[0].shape);
+    }
+     if (typeof graphObject.setNodesAndLinks !== 'undefined') {
+	    graphObject.setNodesAndLinks(nodes, links);
+     } else {
+        console.log ("Second node from get is :" + nodes[1]);
+        graphObject.nodes = nodes.slice();
+        graphObject.links = links.slice();
+     }
+
+     // Now we call the callback so that the parent component knows the data is ready to render.
+     if (typeof callback === "function") {
+        callback('true');
+     }
   });
   console.log("after nodeResult");
   return nodes;
 }
+
+export function getLabels(query, labelObject) {
+	
+    // Pull the connection info from the ,env file.  Copy and change template.env
+    const neo4j = require('neo4j-driver').v1;
+    const driver = neo4j.driver(process.env.REACT_APP_BOLT_URL,
+                                 neo4j.auth.basic(process.env.REACT_APP_BOLT_USER, 
+                                 process.env.REACT_APP_BOLT_PASSWORD));
+    const session = driver.session();
+    console.log(query);
+    const labelResult = session.run(query)
+    var labels = [];
+
+    console.log("before labelResult");
+    var labelPromise = labelResult.then(result => {
+       console.log("in labelResult");
+       var nRecords = result.records.length;
+       console.log("number of labels found is: " + nRecords);
+       for (var i = 0; i < nRecords; i++) {
+           console.log(result.records[i]._fields[0]);
+           var thisLabel = { value: result.records[i]._fields[0], label: result.records[i]._fields[0]};
+		   labels.push(thisLabel);
+       }
+
+    session.close();
+    driver.close();
+    console.log("First label to return " + labels[0]);
+    labelObject.setLabels(labels);
+  });
+  console.log("after labelResult");
+  return labels;
+}
+
