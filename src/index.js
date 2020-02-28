@@ -264,8 +264,6 @@ class SSMGraphData extends React.Component {
        showPopup : false,
        currentNode : '',
 	};
-
-    const label = props.label;
   }
 
 /**
@@ -382,6 +380,8 @@ class ParentContainer extends React.Component {
       // Using this query, when the user selects a circle node the underlying driver retures a failure
       // The query works in the Neo4J browser so I suspect this is a bug in the driver.
       this.subGraphQuery ='MATCH p = (b)-[*0..]->(n:LABEL)-[*0..]->(a) where n.id = ID and b.shape = "circle" RETURN p';
+      // Workaround for the above bug. Only used if the user has selected a circle (role node)
+      this.subGraphWorkAroundQuery ='MATCH p = (b)-[*]->(n:test) where b.id = ID RETURN p';
 
       // Bind these functions so that when they get called in the individual components, they
       // execute in the ParentContainer context.
@@ -500,7 +500,13 @@ class ParentContainer extends React.Component {
              break;
 
          case "sub":
-             theQuery = this.subGraphQuery.replace("LABEL", this.state.selectedOption).replace(/ID/g, this.state.selectedNode.ssmId);
+             if (this.state.selectedNode.shape === "circle") {
+               // Use the workaround query
+               theQuery = this.subGraphWorkAroundQuery.replace("LABEL", this.state.selectedOption).replace(/ID/g, this.state.selectedNode.ssmId);
+             } else {
+               // The normal query
+               theQuery = this.subGraphQuery.replace("LABEL", this.state.selectedOption).replace(/ID/g, this.state.selectedNode.ssmId);
+             }
              console.log ("theQuery: " + theQuery);
              break;
 
