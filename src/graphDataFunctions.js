@@ -36,6 +36,7 @@ export function getNodes(query, graphObject, callback) {
                                  process.env.REACT_APP_BOLT_PASSWORD));
     const session = driver.session();
     const nodeResult = session.run(query)
+    var path = require('path');
     console.log("query in getNodes is: " + query);
 
     nodeResult.then(result => {
@@ -100,7 +101,8 @@ export function getNodes(query, graphObject, callback) {
 			target: identity2,
 			sourceName: thisName,
 			targetName: thisTargetName,
-			name: "to"
+			name: path.basename(thisSourceFile, 'json')
+			//name: "to"
 		 }
 
 		 links.push(thisLink);
