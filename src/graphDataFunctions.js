@@ -89,7 +89,7 @@ export function getNodes(query, graphObject, callback) {
            
            if (thisNode.shape !== "noBorder") {
              nodes.push(thisNode);
-             console.log(result.records[i]);
+   //          console.log(result.records[i]);
              //console.log(result.records[i]._fields[0]);
            }
 		 } // end of second node loop
@@ -160,10 +160,10 @@ export function getNodesFromPath(query, graphObject, callback) {
        console.log("nRecords in getNodesFromPath is: " + nRecords);
        for (var i = 0; i < nRecords; i++) {
          var nSegments = result.records[i]._fields[0].segments.length;
-         console.log("nSegments in getNodesFromPath is: " + nSegments);
+//       console.log("nSegments in getNodesFromPath is: " + nSegments);
          for (var j = 0; j < nSegments; j++) {
             var thisSegment = result.records[i]._fields[0].segments[j];
-            console.log("thisSegment in getNodesFromPath is: " , thisSegment);
+//          console.log("thisSegment in getNodesFromPath is: " , thisSegment);
 
    	        // we start by looking at the first node
             var startNode = thisSegment.start;
@@ -189,7 +189,7 @@ export function getNodesFromPath(query, graphObject, callback) {
            
                if (thisNode.shape !== "noBorder") {
                  nodes.push(thisNode);
-                 console.log("pushed this node:", thisNode);
+//               console.log("pushed this node:", thisNode);
                }
              }
 
@@ -213,7 +213,7 @@ export function getNodesFromPath(query, graphObject, callback) {
            
                 if (thisNode.shape !== "noBorder") {
                   nodes.push(thisNode);
-                  console.log("pushed this node:", thisNode);
+//                console.log("pushed this node:", thisNode);
                 }
 		      }
 
@@ -236,21 +236,6 @@ export function getNodesFromPath(query, graphObject, callback) {
 		 } // end of records
          console.log("added these nodes: ", nodes);
          console.log("added these links: ", links);
-
-   /*
-		 // Now let's add a link.  Each record represents the 2 nodes and the link, so there is no
-		 // testing or exclusions or repeats to worry about.
-		 var thisLink = {
-		    source: identity1,
-			target: identity2,
-			sourceName: thisName,
-			targetName: thisTargetName,
-			name: "to"
-		 }
-
-		 links.push(thisLink);
-       }
-   */
     session.close();
     driver.close();
     if (typeof nodes[0] !== 'undefined') {
@@ -307,6 +292,71 @@ export function getLabels(query, labelObject) {
     driver.close();
     console.log("First label to return " + labels[0]);
     labelObject.setLabels(labels);
+  });
+}
+
+
+/**
+ * This function retrieves the list of maps for a label in the Neo4j database. 
+ * We use a java script promise to handle the asynchronous nature of the query. In the then clause, we
+ * construct an array of maps that eventually get added to the inputed map object. 
+ * @param  {String} the query to execute
+ * @param  {Object} the map object
+ * @param  {Function} the callback function to execute when the data is ready to render
+ * @return {None}
+ */
+export function getMaps(query, mapObject) {
+	
+    // Pull the connection info from the ,env file.  Copy and change template.env
+    const neo4j = require('neo4j-driver').v1;
+    const driver = neo4j.driver(process.env.REACT_APP_BOLT_URL,
+                                 neo4j.auth.basic(process.env.REACT_APP_BOLT_USER, 
+                                 process.env.REACT_APP_BOLT_PASSWORD));
+    const session = driver.session();
+    console.log(query);
+    const mapResult = session.run(query)
+    var maps = [];
+    var mapsByLabel = {};
+    var path = require('path');
+
+    mapResult.then(result => {
+       var nRecords = result.records.length;
+       console.log("number of maps found is: " + nRecords);
+       for (var i = 0; i < nRecords; i++) {
+           var thisMap = { sourceFile: result.records[i]._fields[0], 
+                           name: path.basename(result.records[i]._fields[0], 'json'), 
+                           label: result.records[i]._fields[1][0]};
+		   maps.push(thisMap);
+       }
+
+    // We currently have an array of objects that have sourceFile, name and label attributes. What we actually
+    // want is an array of objects with a label attribute, where each of these objects contains an array of
+    // objects with the sourceFile and name attributes
+    for (i = 0; i < maps.length; i++) {
+       var retrievedMap = maps[i];
+       var thisMapToInsert = {value: retrievedMap.sourceFile, label: retrievedMap.name};
+       var thisLabel = retrievedMap.label;
+       if (mapsByLabel.hasOwnProperty(retrievedMap.label)){
+         // Not the first time we have seen this label
+         mapsByLabel[thisLabel].maps.push(thisMapToInsert);
+       } else {
+         mapsByLabel[thisLabel] = {};
+         mapsByLabel[thisLabel].maps = [];
+         mapsByLabel[thisLabel].maps.push(thisMapToInsert);
+       }
+
+    }
+
+    console.log("mapsByLabel: ", mapsByLabel);
+    session.close();
+    driver.close();
+    console.log("First map to return " + maps[0]);
+    mapObject.setMaps(mapsByLabel);
+
+    // Now we call the callback so that the parent component knows the data is ready to render.
+//    if (typeof callback === "function") {
+//        callback('true');
+//    }
   });
 }
 

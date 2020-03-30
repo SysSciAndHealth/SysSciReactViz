@@ -34,12 +34,14 @@ class SelectLabelComponent extends React.Component {
      this.state = {
         labels: [],
         selectedOption: '',
-        cypherQuery: 'MATCH (n) RETURN distinct labels(n)'
+        labelQuery: 'MATCH (n) RETURN distinct labels(n)',
+        mapQuery: 'MATCH (n) RETURN distinct n.sourcefile, labels(n)'
+
      };
 
      this.handleLabelChange = this.handleLabelChange.bind(this);
      const graphDataFunctions = require('./graphDataFunctions');
-     graphDataFunctions.getLabels(this.state.cypherQuery, this);
+     graphDataFunctions.getLabels(this.state.labelQuery, this);
   }
 
 /**
@@ -85,6 +87,7 @@ class SelectLabelComponent extends React.Component {
  */
   render() {
 
+    console.log("Rendering the label component with labels: ", this.state.labels);
     return (
     <div style={{width: '200px'}}>
        <div className="label">Select A Label</div>
@@ -97,6 +100,102 @@ class SelectLabelComponent extends React.Component {
     );
   }
 }
+
+/**
+ * This is the container for the select maps menu. This component allows the user to select one or more
+ * maps from a list to be displayed. If the user doesn't select any maps, then all the maps for the
+ * selected label are displayed.
+ */
+class SelectMapsComponent extends React.Component {
+/**
+ * Constructor for this component
+ * @param  {Object} a property object that includes the function that is called when the user 
+ *                  makes a selection
+ * @return {None}
+ */
+  constructor (props) {
+     super (props);
+
+     this.state = {
+        maps: {},
+        selectedOptions: [],
+        mapQuery: 'MATCH (n) RETURN distinct n.sourcefile, labels(n)'
+     };
+
+     this.handleMapsChange = this.handleMapsChange.bind(this);
+     graphDataFunctions.getMaps(this.state.mapQuery, this);
+  }
+
+/**
+ * Function passed to the getMaps function to set the map array
+ * @param  {Object} the map array
+ * @return {None}
+ */
+  setMaps (theMaps) {
+     console.log("In setMaps ");
+     this.setState((state) => {
+       let savedMaps = Object.assign({}, state.maps);
+       console.log(theMaps);
+       savedMaps = theMaps;
+       return ({maps: savedMaps});
+     });
+  }  
+
+
+/**
+ * Local binding for the passed in function
+ * @param  {Object} the user selected option
+ * @return {None}
+ */
+  handleMapsChange(selectedOptions) {
+    console.log("Maps selected: ", selectedOptions);
+    this.props.handleMapChange(selectedOptions);
+  }
+
+/**
+ * Function called when the user changes the value of the select object
+ * @param  {Object} the user selected option
+ * @return {None}
+ */
+  // This function is called when the user changes the value of the select object
+  handleChange = selectedOptions => {
+    this.setState(
+      { selectedOptions },
+      () => this.handleMapsChange(selectedOptions)
+    );
+  };
+
+
+/**
+ * The render function
+ */
+  render() {
+
+    // This seems to catch the case where we are trying to render this component before we
+    // have the map data from the promise.
+    if (this.state.maps[this.props.label] === undefined || this.state.maps.length === 0) {
+       // Let's not try to render what isn't there.
+       return (null);
+    } else {
+
+       console.log("Rendering the map component with maps: ", this.state.maps);
+    
+       // The very cool multi select widget.  It returns a possibly empty array of user selected values.
+       return (
+       <div style={{width: '300px'}}>
+          <div className="maps">Select Maps</div>
+         <Select
+           isMulti
+           value={this.selectedOptions}
+           onChange={this.handleChange}
+           options={this.state.maps[this.props.label]["maps"]}
+         />
+       </div>
+       );
+    }
+  }
+}
+
 
 /**
  * This is the container for the select view menu.
@@ -364,8 +463,10 @@ class ParentContainer extends React.Component {
 
       this.state = {
          labels: [],
+         selectedMaps: [],
+         maps: {},
          readyToRender: 'false',
-         selectedOption: 'test',
+         selectedLabel: 'test',
          selectedViewOption: 'test',
          selectedPopupOption: 'test',
          showPopup: false,
@@ -373,23 +474,26 @@ class ParentContainer extends React.Component {
       };
 
       // Set the default querys.  LABEL will be replaced with what the user selected.
-      this.cypherQuery = 'MATCH (n:LABEL)-[r]->(a) RETURN n,type(r),a';
-      this.viewQuery = 'MATCH (n:LABEL)-[r]->(a) where a.shape = "rectangle" RETURN n,type(r),a';
-      this.neighborQuery = 'MATCH (n:LABEL)-[r]->(a) where n.id = ID or a.id = ID RETURN n,type(r),a';
+      this.nodeQuery = 'MATCH (n:`LABEL`)-[r]->(a) RETURN n,type(r),a';
+      this.mapQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE RETURN n,type(r),a';
+      this.viewQuery = 'MATCH (n:`LABEL`)-[r]->(a) where a.shape = "rectangle" RETURN n,type(r),a';
+      this.neighborQuery = 'MATCH (n:`LABEL`)-[r]->(a) where n.sourcefile = "SOURCEFILE" and (n.id = ID or a.id = ID) RETURN n,type(r),a';
 
       // Using this query, when the user selects a circle node the underlying driver retures a failure
       // The query works in the Neo4J browser so I suspect this is a bug in the driver.
-      this.subGraphQuery ='MATCH p = (b)-[*0..]->(n:LABEL)-[*0..]->(a) where n.id = ID and b.shape = "circle" RETURN p';
+      this.subGraphQuery ='MATCH p = (b)-[*0..]->(n:`LABEL`)-[*0..]->(a) where n.id = ID and n.sourcefile = "SOURCEFILE" and b.shape = "circle" RETURN p';
       // Workaround for the above bug. Only used if the user has selected a circle (role node)
       this.subGraphWorkAroundQuery ='MATCH p = (b)-[*]->(n:test) where b.id = ID RETURN p';
 
       // Bind these functions so that when they get called in the individual components, they
       // execute in the ParentContainer context.
       this.handleSelectLabelChange = this.handleSelectLabelChange.bind(this);
+      this.handleSelectMapsChange = this.handleSelectMapsChange.bind(this);
       this.handleSelectViewChange = this.handleSelectViewChange.bind(this);
       this.handlePopupStateChange = this.handlePopupStateChange.bind(this);
       this.handlePopupChange = this.handlePopupChange.bind(this);
       this.triggerRender = this.triggerRender.bind(this);
+      this.setMapData = this.setMapData.bind(this);
     
       // the local copy of the graph 
       this.graph = {
@@ -418,6 +522,20 @@ class ParentContainer extends React.Component {
      );
    };
 
+/**
+ * Function passed to the getMaps function to set the map array
+ * @param  {Object} the map array
+ * @return {None}
+ */
+  setMapData (theMaps) {
+     console.log("In setMapData ");
+     this.setState((state) => {
+       let savedMaps = Object.assign({}, state.maps);
+       console.log(theMaps);
+       savedMaps = theMaps;
+       return ({maps: savedMaps});
+     });
+  }
 
 /**
  * Create a query based on the option the user selected, then call the getNodes function to
@@ -428,16 +546,16 @@ class ParentContainer extends React.Component {
  * @return {None}
  */
    getNodeDataFromSelectViewChange(selectedViewOption) {
-     console.log(`In getNodeDataFromSelectViewChange `,this.state.selectedOption);
+     console.log(`In getNodeDataFromSelectViewChange `,this.state.selectedLabel);
      var theQuery;
      // Create the query depending on what the user's selected.
      switch (selectedViewOption.value) {
          case "roles":
-             theQuery = this.viewQuery.replace("LABEL", this.state.selectedOption);
+             theQuery = this.viewQuery.replace("LABEL", this.state.selectedLabel);
              console.log ("theQuery: " + theQuery);
              break;
          case "all":
-             theQuery = this.cypherQuery.replace("LABEL", this.state.selectedOption);
+             theQuery = this.nodeQuery.replace("LABEL", this.state.selectedLabel);
              console.log ("theQuery: " + theQuery);
              break;
          default:
@@ -490,22 +608,22 @@ class ParentContainer extends React.Component {
      // Create the query depending on what the user's selected.
      switch (selectedPopupOption.value) {
          case "roles":
-             theQuery = this.viewQuery.replace("LABEL", this.state.selectedOption);
+             theQuery = this.viewQuery.replace("LABEL", this.state.selectedLabel);
              console.log ("theQuery: " + theQuery);
              break;
 
          case "neighbor":
-             theQuery = this.neighborQuery.replace("LABEL", this.state.selectedOption).replace(/ID/g, this.state.selectedNode.ssmId);
+             theQuery = this.neighborQuery.replace("LABEL", this.state.selectedLabel).replace(/ID/g, this.state.selectedNode.ssmId).replace("SOURCEFILE", this.state.selectedNode.sourceFile);
              console.log ("theQuery: " + theQuery);
              break;
 
          case "sub":
              if (this.state.selectedNode.shape === "circle") {
                // Use the workaround query
-               theQuery = this.subGraphWorkAroundQuery.replace("LABEL", this.state.selectedOption).replace(/ID/g, this.state.selectedNode.ssmId);
+               theQuery = this.subGraphWorkAroundQuery.replace("LABEL", this.state.selectedLabel).replace(/ID/g, this.state.selectedNode.ssmId).replace("SOURCEFILE", this.state.selectedNode.sourceFile);
              } else {
                // The normal query
-               theQuery = this.subGraphQuery.replace("LABEL", this.state.selectedOption).replace(/ID/g, this.state.selectedNode.ssmId);
+               theQuery = this.subGraphQuery.replace("LABEL", this.state.selectedLabel).replace(/ID/g, this.state.selectedNode.ssmId).replace("SOURCEFILE", this.state.selectedNode.sourceFile);
              }
              console.log ("theQuery: " + theQuery);
              break;
@@ -571,10 +689,10 @@ class ParentContainer extends React.Component {
  *                  level component.
  * @return {None}
  */
-   handleSelectLabelChange(selectedOption) {
-     console.log(`In handleSelectLabelChange `, selectedOption);
+   handleSelectLabelChange(selectedLabel) {
+     console.log(`In handleSelectLabelChange `, selectedLabel);
      const graphDataFunctions = require('./graphDataFunctions');
-     var realQuery = this.cypherQuery.replace("LABEL", selectedOption.value);
+     var realQuery = this.nodeQuery.replace("LABEL", selectedLabel.value);
      console.log("handleSelectLabelChange ", realQuery);
 
      // Get the data from Neo4j based on the user selection. Add the callback to
@@ -583,9 +701,57 @@ class ParentContainer extends React.Component {
 
      console.log("setting state in handleSelectLabelChange");
      this.setState(
-       { selectedOption: selectedOption.value}
+       { selectedLabel: selectedLabel.value}
      );
    };
+
+/**
+ * Function passed to the SelectMap component. Function is bound to this context so 
+ * that when it is executed in the lower level component, the state will be changed in the
+ * parent component and we can call the appropriate getNodeData function.
+ * @param  {String} The option array returned from the user's choice in the select in the lower
+ *                  level component.
+ * @return {None}
+ */
+   handleSelectMapsChange(selectedMaps) {
+     console.log(`In handleSelectMapsChange `, selectedMaps);
+     const graphDataFunctions = require('./graphDataFunctions');
+
+     var mapClause;
+     var newClause;
+     
+     if (selectedMaps === undefined || selectedMaps ===  null || selectedMaps.length === 0) {
+       // If the user hasn't selected any maps, we show them all
+       mapClause = "";
+     } else {
+       console.log(`maps length is `, selectedMaps.length);
+       // We set the map clause to include an or clause for every map
+       mapClause = "where (";
+       for (var i = 0; i < selectedMaps.length; i++) {
+          newClause = "n.sourcefile = '" + selectedMaps[i].value + "'";
+          if ( i === 0) {
+            // The first clause : just append the condition
+            mapClause = mapClause.concat(newClause);
+          } else {
+            // Not the first condition: we'll need an or clause
+            mapClause = mapClause.concat(" or ").concat(newClause);
+          }
+       }
+       mapClause = mapClause.concat(")")
+     }
+     var realQuery = this.mapQuery.replace("LABEL", this.state.selectedLabel).replace("MAPCLAUSE", mapClause);
+     console.log("handleSelectMapsChange ", realQuery);
+
+     // Get the data from Neo4j based on the user selection. Add the callback to
+     // ensure the re-render happens once the data is all retrieved.
+     graphDataFunctions.getNodes(realQuery, this.graph, this.triggerRender);
+
+     console.log("setting state in handleSelectMapsChange");
+     this.setState(
+       { selectedMaps: selectedMaps}
+     );
+   };
+
 
 /**
  * This is the render function for the top-level component.
@@ -597,12 +763,14 @@ class ParentContainer extends React.Component {
         <div className="header"><h4>SSM Visualization</h4></div>
         <Container>
            <Row>
-              <Col md="auto"><SelectLabelComponent handleLabelChange={this.handleSelectLabelChange}/></Col>
+              <Col md="auto"><SelectLabelComponent handleLabelChange={this.handleSelectLabelChange} setMapData={this.setMapData}/></Col>
+              <Col md="auto"><SelectMapsComponent handleMapChange={this.handleSelectMapsChange} 
+                                                  label={this.state.selectedLabel}/></Col>
               <Col md="auto"><SelectViewComponent handleViewChange={this.handleSelectViewChange}/></Col>
               <Col md="auto"><PopupComponent showPopup={this.state.showPopup} handlePopupChange={this.handlePopupChange}/></Col>
            </Row>   
         </Container>   
-        <SSMGraphData handlePopupStateChange={this.handlePopupStateChange} label={this.state.selectedOption} graph={this.graph}/>
+        <SSMGraphData handlePopupStateChange={this.handlePopupStateChange} label={this.state.selectedLabel} graph={this.graph}/>
      </div>
    );
    }
