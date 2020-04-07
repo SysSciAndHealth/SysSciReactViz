@@ -18,6 +18,15 @@ import Popper from 'popper.js';
 import { Dropdown, MenuItem, DropdownButton } from "react-bootstrap";
 import Select from 'react-select';
 
+// A global table used to associate the ring shapes with the names of the rings.
+    var shapeTable = {
+       roles: "circle",   
+       responsibilities: "rectangle",
+       needs: "diamond", 
+       resources: "ellipse",
+       wishes: "star"   
+    };
+
 /**
  * This is the container for the select label menu 
  */
@@ -218,7 +227,11 @@ class SelectViewComponent extends React.Component {
      // The set of options is static, so build an array and jam it in.
      this.theViewList = [
         { value: 'all', label: 'All Nodes'},
-        { value: 'roles', label: 'All Roles'},
+        { value: 'roles', label: 'Roles'},
+        { value: 'responsibilities', label: 'Responsibilities'},
+        { value: 'needs', label: 'Needs'},
+        { value: 'resources', label: 'Resources'},
+        { value: 'wishes', label: 'Wishes'},
         ];
 
 
@@ -422,6 +435,7 @@ render() {
         
         <div className="theGraph"><
            ForceGraph3D graphData={data} 
+           nodeRelSize={10}
            ref={el => { this.fg = el; }}
            onNodeClick={this._handleClick}
            onNodeRightClick={this.props.handlePopupStateChange}
@@ -477,6 +491,8 @@ class ParentContainer extends React.Component {
       this.nodeQuery = 'MATCH (n:`LABEL`)-[r]->(a) RETURN n,type(r),a';
       this.mapQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE RETURN n,type(r),a';
       this.viewQuery = 'MATCH (n:`LABEL`)-[r]->(a) where a.shape = "rectangle" RETURN n,type(r),a';
+      this.viewDyadQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE a.shape = "rectangle" RETURN n,type(r),a';
+      this.ringQuery ='MATCH p = (b)-[*0..]->(n:`LABEL`)-[*0..]->(a) MAPCLAUSE  a.shape = "SHAPE" and b.shape = "rectangle" RETURN p';
       this.neighborQuery = 'MATCH (n:`LABEL`)-[r]->(a) where n.sourcefile = "SOURCEFILE" and (n.id = ID or a.id = ID) RETURN n,type(r),a';
 
       // Using this query, when the user selects a circle node the underlying driver retures a failure
@@ -546,26 +562,63 @@ class ParentContainer extends React.Component {
  * @return {None}
  */
    getNodeDataFromSelectViewChange(selectedViewOption) {
-     console.log(`In getNodeDataFromSelectViewChange `,this.state.selectedLabel);
+     console.log(`In getNodeDataFromSelectViewChange `, selectedViewOption);
+     const graphDataFunctions = require('./graphDataFunctions');
+
      var theQuery;
      // Create the query depending on what the user's selected.
+     var andClause = "";
+     var mapClause = this.buildSelectedMapClause(this.state.selectedMaps);
+     if (mapClause !== "") {
+        mapClause = mapClause.concat(" and ");
+     } else {
+        mapClause = " where";
+     }   
+     console.log ("map clauses: " + mapClause);
+
+     /* This case statement could easily be confusing.  The point of this code is to present a set 
+      * of nodes to the user for viewing/sorting by ring. The user always wants to see the Responsibilities.  
+      * If the user is viewing either the Roles or Responsibilities, we show both of those rings for some 
+      * context. But if the user is viewing one of the "outer rings" we want to show all of the nodes in the
+      * full path to the Responsibilities.  This requires a different query, and a different function to
+      * retrieve the nodes from the database.
+      */
      switch (selectedViewOption.value) {
-         case "roles":
-             theQuery = this.viewQuery.replace("LABEL", this.state.selectedLabel);
-             console.log ("theQuery: " + theQuery);
-             break;
          case "all":
              theQuery = this.nodeQuery.replace("LABEL", this.state.selectedLabel);
-             console.log ("theQuery: " + theQuery);
+             graphDataFunctions.getNodes(theQuery, this.graph, this.triggerRender);
              break;
+
+         case "roles":
+         case "responsibilities":
+             theQuery = this.viewDyadQuery.replace("LABEL", this.state.selectedLabel).replace("MAPCLAUSE", mapClause);
+             graphDataFunctions.getNodes(theQuery, this.graph, this.triggerRender);
+             break;
+
+//             theQuery = this.ringQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "rectangle").replace("MAPCLAUSE", mapClause);
+//             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
+//             break;
+
+         case "needs":
+             theQuery = this.ringQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "diamond").replace("MAPCLAUSE", mapClause);
+             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
+             break;
+
+         case "resources":
+             theQuery = this.ringQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "ellipse").replace("MAPCLAUSE", mapClause);
+             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
+             break;
+
+         case "wishes":
+             theQuery = this.ringQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "star").replace("MAPCLAUSE", mapClause);
+             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
+             break;
+
          default:
              console.log ("unsupported view option: " + selectedViewOption.value);
      }
-     const graphDataFunctions = require('./graphDataFunctions');
+     console.log ("theQuery: " + theQuery);
 
-     // Get the data from Neo4j based on the user selection. Add the callback to
-     // ensure the re-render happens once the data is all retrieved.
-     graphDataFunctions.getNodes(theQuery, this.graph, this.triggerRender);
    };
 
 /**
@@ -706,16 +759,15 @@ class ParentContainer extends React.Component {
    };
 
 /**
- * Function passed to the SelectMap component. Function is bound to this context so 
- * that when it is executed in the lower level component, the state will be changed in the
- * parent component and we can call the appropriate getNodeData function.
+ * Function to create a "map" clause from an array of selected maps.  This is used to allow
+ * the user to select which set of maps they want to view.  It's used in several contexts, which is why
+ * it's a function instead of in-line code.
  * @param  {String} The option array returned from the user's choice in the select in the lower
  *                  level component.
- * @return {None}
+ * @return {String} The possible empy string which contains the where clause to include in a node query.
  */
-   handleSelectMapsChange(selectedMaps) {
-     console.log(`In handleSelectMapsChange `, selectedMaps);
-     const graphDataFunctions = require('./graphDataFunctions');
+  buildSelectedMapClause(selectedMaps) {
+     console.log(`In buildSelectedMapClause `, selectedMaps);
 
      var mapClause;
      var newClause;
@@ -739,6 +791,23 @@ class ParentContainer extends React.Component {
        }
        mapClause = mapClause.concat(")")
      }
+
+     return (mapClause);
+  }
+
+/**
+ * Function passed to the SelectMap component. Function is bound to this context so 
+ * that when it is executed in the lower level component, the state will be changed in the
+ * parent component and we can call the appropriate getNodeData function.
+ * @param  {String} The option array returned from the user's choice in the select in the lower
+ *                  level component.
+ * @return {None}
+ */
+   handleSelectMapsChange(selectedMaps) {
+     console.log(`In handleSelectMapsChange `, selectedMaps);
+     const graphDataFunctions = require('./graphDataFunctions');
+
+     var mapClause = this.buildSelectedMapClause(selectedMaps);
      var realQuery = this.mapQuery.replace("LABEL", this.state.selectedLabel).replace("MAPCLAUSE", mapClause);
      console.log("handleSelectMapsChange ", realQuery);
 

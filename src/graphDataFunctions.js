@@ -147,6 +147,7 @@ export function getNodesFromPath(query, graphObject, callback) {
     var linksAdded = {};
     var nodes = [];
     var links = [];
+    var path = require('path');
 	
     // Pull the connection info from the ,env file.  Copy and change template.env
     const neo4j = require('neo4j-driver').v1;
@@ -229,7 +230,7 @@ export function getNodesFromPath(query, graphObject, callback) {
 			        target: identity2,
 			        sourceName: thisName,
 			        targetName: thisTargetName,
-			        name: "to"
+			        name: path.basename(thisSourceFile, 'json')
 		         }
 		         links.push(thisLink);
              }
