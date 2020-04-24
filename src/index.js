@@ -17,6 +17,8 @@ import 'bootstrap/dist/js/bootstrap.js';
 import Popper from 'popper.js';
 import { Dropdown, MenuItem, DropdownButton } from "react-bootstrap";
 import Select from 'react-select';
+import ConceptMapComponent from './ConceptMapComponent.js'
+import ConceptComponent from './ConceptComponent.js'
 
 // A global table used to associate the ring shapes with the names of the rings.
     var shapeTable = {
@@ -191,7 +193,7 @@ class SelectMapsComponent extends React.Component {
     
        // The very cool multi select widget.  It returns a possibly empty array of user selected values.
        return (
-       <div style={{width: '300px'}}>
+       <div style={{width: '400px'}}>
           <div className="maps">Select Maps</div>
          <Select
            isMulti
@@ -471,35 +473,54 @@ render() {
  * This is the parent (highest level) container for the application.  It controls all of the
  * GUI elements as well as the actual graph
  */
-class ParentContainer extends React.Component {
+ class ParentContainer extends React.Component {
    constructor (props) {
    super (props);
 
       this.state = {
+         popupDiv:{
+                padding: 5000,
+                top: 300 + 'px',
+                left: 300 + 'px', // hide div first
+                position: 'absolute'
+            },
          labels: [],
          selectedMaps: [],
          maps: {},
+         conceptNodes: [],
+         conceptLinks: [],
          readyToRender: 'false',
          selectedLabel: 'test',
          selectedViewOption: 'test',
          selectedPopupOption: 'test',
+         selectedConceptMapOption: 'new',
          showPopup: false,
          selectedNode: ''
       };
 
       // Set the default querys.  LABEL will be replaced with what the user selected.
-      this.nodeQuery = 'MATCH (n:`LABEL`)-[r]->(a) RETURN n,type(r),a';
+      // This quert gives all the nodes for a given label.  All the other queries used to return
+      // nodes also include the label.
+      this.nodesByLabelQuery = 'MATCH (n:`LABEL`)-[r]->(a) RETURN n,type(r),a';
       this.mapQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE RETURN n,type(r),a';
-      this.viewQuery = 'MATCH (n:`LABEL`)-[r]->(a) where a.shape = "rectangle" RETURN n,type(r),a';
+
+      // QUeries used in the view menu to select a subset of rings to view. Note that these
+      // queries are set up to always show at least the responsibilities nodes and the complete path
+      // to get there
       this.viewDyadQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE a.shape = "rectangle" RETURN n,type(r),a';
-      this.ringQuery ='MATCH p = (b)-[*0..]->(n:`LABEL`)-[*0..]->(a) MAPCLAUSE  a.shape = "SHAPE" and b.shape = "rectangle" RETURN p';
-      this.neighborQuery = 'MATCH (n:`LABEL`)-[r]->(a) where n.sourcefile = "SOURCEFILE" and (n.id = ID or a.id = ID) RETURN n,type(r),a';
+      this.viewAllNodeQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE RETURN n,type(r),a';
+      this.viewPathQuery ='MATCH p = (b)-[*0..]->(n:`LABEL`)-[*0..]->(a) MAPCLAUSE  a.shape = "SHAPE" and b.shape = "rectangle" RETURN p';
+
+
+      // Queries for the popup menu
+      this.popupRoleQuery = 'MATCH (n:`LABEL`)-[r]->(a) where a.shape = "rectangle" and n.sourcefile = "SOURCEFILE" RETURN n,type(r),a';
+      this.popupNeighborQuery = 'MATCH (n:`LABEL`)-[r]->(a) where n.sourcefile = "SOURCEFILE" and (n.id = ID or a.id = ID) RETURN n,type(r),a';
 
       // Using this query, when the user selects a circle node the underlying driver retures a failure
       // The query works in the Neo4J browser so I suspect this is a bug in the driver.
-      this.subGraphQuery ='MATCH p = (b)-[*0..]->(n:`LABEL`)-[*0..]->(a) where n.id = ID and n.sourcefile = "SOURCEFILE" and b.shape = "circle" RETURN p';
-      // Workaround for the above bug. Only used if the user has selected a circle (role node)
-      this.subGraphWorkAroundQuery ='MATCH p = (b)-[*]->(n:test) where b.id = ID RETURN p';
+      this.popupSubGraphQuery ='MATCH p = (b)-[*0..]->(n:`LABEL`)-[*0..]->(a) where n.id = ID and n.sourcefile = "SOURCEFILE" and b.shape = "circle" RETURN p';
+      // Wokaround for the above bug. Only used if the user has selected a circle (role node)
+      this.popupSubGraphWorkAroundQuery ='MATCH p = (b)-[*]->(n:test) where b.id = ID RETURN p';
 
       // Bind these functions so that when they get called in the individual components, they
       // execute in the ParentContainer context.
@@ -508,8 +529,12 @@ class ParentContainer extends React.Component {
       this.handleSelectViewChange = this.handleSelectViewChange.bind(this);
       this.handlePopupStateChange = this.handlePopupStateChange.bind(this);
       this.handlePopupChange = this.handlePopupChange.bind(this);
+      this.handleConceptMapChange = this.handleConceptMapChange.bind(this);
       this.triggerRender = this.triggerRender.bind(this);
       this.setMapData = this.setMapData.bind(this);
+      this.addConceptNode = this.addConceptNode.bind(this);
+      this.addConceptLink = this.addConceptLink.bind(this);
+
     
       // the local copy of the graph 
       this.graph = {
@@ -522,6 +547,25 @@ class ParentContainer extends React.Component {
       };
    }
 
+/**
+ * Function passed to the ConceptComponent.  It's called when a new
+ * concept is created in the map.  The ConceptComponent creates a new node and
+ * this function adds it to the list in the state array so it can eventually be 
+ * rendered properly.
+ * @param  {Object} the newly created concept node
+ * @return {None}
+ */
+
+  addConceptNode (theNode) {
+     console.log("in addConceptNode: ", theNode);
+     this.setState((state) => {
+       var savedNodes = [...state.conceptNodes];
+       savedNodes.push(theNode);
+       return ({conceptNodes: savedNodes});
+     });
+  }
+      addConceptLink () {
+      }
 /**
  * Callback function to pass to graphDataFunctions.getNodes.  This function is called in
  * the "then" portion of getNodes once the data has been retrieved from the Neo4J datastore. 
@@ -563,7 +607,6 @@ class ParentContainer extends React.Component {
  */
    getNodeDataFromSelectViewChange(selectedViewOption) {
      console.log(`In getNodeDataFromSelectViewChange `, selectedViewOption);
-     const graphDataFunctions = require('./graphDataFunctions');
 
      var theQuery;
      // Create the query depending on what the user's selected.
@@ -573,16 +616,17 @@ class ParentContainer extends React.Component {
         mapClause = mapClause.concat(" and ");
      } else {
         mapClause = " where";
-     }   
+     }
      console.log ("map clauses: " + mapClause);
 
-     /* This case statement could easily be confusing.  The point of this code is to present a set 
-      * of nodes to the user for viewing/sorting by ring. The user always wants to see the Responsibilities.  
-      * If the user is viewing either the Roles or Responsibilities, we show both of those rings for some 
+     /* This case statement could easily be confusing.  The point of this code is to present a set
+      * of nodes to the user for viewing/sorting by ring. The user always wants to see the Responsibilities.
+      * If the user is viewing either the Roles or Responsibilities, we show both of those rings for some
       * context. But if the user is viewing one of the "outer rings" we want to show all of the nodes in the
       * full path to the Responsibilities.  This requires a different query, and a different function to
       * retrieve the nodes from the database.
       */
+     const graphDataFunctions = require('./graphDataFunctions');
      switch (selectedViewOption.value) {
          case "all":
              theQuery = this.nodeQuery.replace("LABEL", this.state.selectedLabel);
@@ -595,22 +639,22 @@ class ParentContainer extends React.Component {
              graphDataFunctions.getNodes(theQuery, this.graph, this.triggerRender);
              break;
 
-//             theQuery = this.ringQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "rectangle").replace("MAPCLAUSE", mapClause);
+//             theQuery = this.ringQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "rect
 //             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
 //             break;
 
          case "needs":
-             theQuery = this.ringQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "diamond").replace("MAPCLAUSE", mapClause);
+             theQuery = this.viewPathQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "diamond").replace("MAPCLAUSE", mapClause);
              graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
              break;
 
          case "resources":
-             theQuery = this.ringQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "ellipse").replace("MAPCLAUSE", mapClause);
+             theQuery = this.viewPathQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "ellipse").replace("MAPCLAUSE", mapClause);
              graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
-             break;
+              break;
 
          case "wishes":
-             theQuery = this.ringQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "star").replace("MAPCLAUSE", mapClause);
+             theQuery = this.viewPathQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "star").replace("MAPCLAUSE", mapClause);
              graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
              break;
 
@@ -658,25 +702,29 @@ class ParentContainer extends React.Component {
        showPopup: !prevState.showPopup
        }));
 
+     // Also, once the user has selected one node, they are working with just one map, so we should
+     // reset the selectedMaps list.  This requires us to search the current selected maps list for the
+     // one that matches the sourceFile of the selected node ???. Note this whole menu may be going away...
+
      // Create the query depending on what the user's selected.
      switch (selectedPopupOption.value) {
          case "roles":
-             theQuery = this.viewQuery.replace("LABEL", this.state.selectedLabel);
+             theQuery = this.popupRoleQuery.replace("LABEL", this.state.selectedLabel).replace("SOURCEFILE", this.state.selectedNode.sourceFile);
              console.log ("theQuery: " + theQuery);
              break;
 
          case "neighbor":
-             theQuery = this.neighborQuery.replace("LABEL", this.state.selectedLabel).replace(/ID/g, this.state.selectedNode.ssmId).replace("SOURCEFILE", this.state.selectedNode.sourceFile);
+             theQuery = this.popupNeighborQuery.replace("LABEL", this.state.selectedLabel).replace(/ID/g, this.state.selectedNode.ssmId).replace("SOURCEFILE", this.state.selectedNode.sourceFile);
              console.log ("theQuery: " + theQuery);
              break;
 
          case "sub":
              if (this.state.selectedNode.shape === "circle") {
                // Use the workaround query
-               theQuery = this.subGraphWorkAroundQuery.replace("LABEL", this.state.selectedLabel).replace(/ID/g, this.state.selectedNode.ssmId).replace("SOURCEFILE", this.state.selectedNode.sourceFile);
+               theQuery = this.popupSubGraphWorkAroundQuery.replace("LABEL", this.state.selectedLabel).replace(/ID/g, this.state.selectedNode.ssmId).replace("SOURCEFILE", this.state.selectedNode.sourceFile);
              } else {
                // The normal query
-               theQuery = this.subGraphQuery.replace("LABEL", this.state.selectedLabel).replace(/ID/g, this.state.selectedNode.ssmId).replace("SOURCEFILE", this.state.selectedNode.sourceFile);
+               theQuery = this.popupSubGraphQuery.replace("LABEL", this.state.selectedLabel).replace(/ID/g, this.state.selectedNode.ssmId).replace("SOURCEFILE", this.state.selectedNode.sourceFile);
              }
              console.log ("theQuery: " + theQuery);
              break;
@@ -745,7 +793,7 @@ class ParentContainer extends React.Component {
    handleSelectLabelChange(selectedLabel) {
      console.log(`In handleSelectLabelChange `, selectedLabel);
      const graphDataFunctions = require('./graphDataFunctions');
-     var realQuery = this.nodeQuery.replace("LABEL", selectedLabel.value);
+     var realQuery = this.nodesByLabelQuery.replace("LABEL", selectedLabel.value);
      console.log("handleSelectLabelChange ", realQuery);
 
      // Get the data from Neo4j based on the user selection. Add the callback to
@@ -821,6 +869,39 @@ class ParentContainer extends React.Component {
      );
    };
 
+/**
+ * Keep track of mouse movements so we can plce the popup menu
+ */
+  _onMouseMove(e) {
+      console.log("setting mouse state: ", e);
+      this.setState({
+         popupDiv:{
+            padding: 5000,
+            top:e.screenY + 'px' ,
+            left:e.screenX + 'px' ,
+            position: 'absolute'
+         }
+     })
+  }
+
+/**
+ * Function passed to the ConceptMap component. Function is bound to this context so
+ * that when it is executed in the lower level component, the state will be changed in the
+ * parent component and we can call the appropriate getNodeData function.
+ * @param  {String} The option returned from the user's choice in the select in the lower
+ *                  level component.
+ * @return {None}
+ */
+   handleConceptMapChange(selectedConceptMapOption) {
+     console.log(`In handleConceptMapChange `, selectedConceptMapOption);
+
+     // Make an appropriate call to get the concept map nodes and link
+     // and make the getNodes call.
+ //  this.getConceptMapNodesAndLinks(selectedConceptMapOption)
+     this.setState(
+       { selectedConceptMapOption: selectedConceptMapOption},
+     );
+   };  
 
 /**
  * This is the render function for the top-level component.
@@ -829,22 +910,39 @@ class ParentContainer extends React.Component {
    render () {
    return (
       <div>
-        <div className="header"><h4>SSM Visualization</h4></div>
         <Container>
            <Row>
-              <Col md="auto"><SelectLabelComponent handleLabelChange={this.handleSelectLabelChange} setMapData={this.setMapData}/></Col>
+              <Col md="auto" className="header"><h2>Visualization</h2></Col>
+              <Col md="auto"><SelectLabelComponent handleLabelChange={this.handleSelectLabelChange} 
+                                                   setMapData={this.setMapData}/></Col>
               <Col md="auto"><SelectMapsComponent handleMapChange={this.handleSelectMapsChange} 
                                                   label={this.state.selectedLabel}/></Col>
               <Col md="auto"><SelectViewComponent handleViewChange={this.handleSelectViewChange}/></Col>
               <Col md="auto"><PopupComponent showPopup={this.state.showPopup} handlePopupChange={this.handlePopupChange}/></Col>
            </Row>   
         </Container>   
-        <SSMGraphData handlePopupStateChange={this.handlePopupStateChange} label={this.state.selectedLabel} graph={this.graph}/>
+        <div>
+        <Container>
+           <Row>
+            <Col md="auto" className="header"><h2>Concepts</h2></Col>
+            <Col md="auto"><ConceptMapComponent handleConceptMapChange={this.handleConceptMapChange}
+                                                label={this.state.selectedLabel}/></Col>
+            <Col md="auto"><ConceptComponent label={this.state.selectedLabel} 
+                                             conceptMap={this.state.selectedConceptMapOption}
+                                             addConceptNode={this.addConceptNode}/></Col>
+           </Row>   
+        </Container>   
+        <Container>
+           <Row>
+           <Col md="auto"> <SSMGraphData handlePopupStateChange={this.handlePopupStateChange} label={this.state.selectedLabel} graph={this.graph}/> </Col>
+           </Row>   
+        </Container>   
+        </div>
      </div>
    );
    }
 }
-// ========================================
+//========================================
 
 ReactDOM.render(
   <ParentContainer />,

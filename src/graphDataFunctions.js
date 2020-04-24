@@ -1,11 +1,12 @@
 // A global color table defined so that the colors we display in our react graph
 // match the colors used in the original ssm graphs.
-	var colorTable = {
+export var colorTable = {
 	   circle: "#8800ff",      // purple
 	   rectangle: "#0000ff",   // blue
 	   diamond: "#00bdbd",     // teal
 	   ellipse: "#000000",     // black
-	   star: "#999900"         // yellow-green
+	   star: "#999900",        // yellow-green
+       concept: "#cc0000"      // red
 	};
 
 /**
@@ -321,6 +322,7 @@ export function getMaps(query, mapObject) {
     var maps = [];
     var mapsByLabel = {};
     var path = require('path');
+    console.log("n getMaps with query: " + query);
 
     mapResult.then(result => {
        var nRecords = result.records.length;
