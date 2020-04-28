@@ -19,15 +19,7 @@ import { Dropdown, MenuItem, DropdownButton } from "react-bootstrap";
 import Select from 'react-select';
 import ConceptMapComponent from './ConceptMapComponent.js'
 import ConceptComponent from './ConceptComponent.js'
-
-// A global table used to associate the ring shapes with the names of the rings.
-    var shapeTable = {
-       roles: "circle",   
-       responsibilities: "rectangle",
-       needs: "diamond", 
-       resources: "ellipse",
-       wishes: "star"   
-    };
+import ConceptPopupComponent from './ConceptPopupComponent.js'
 
 /**
  * This is the container for the select label menu 
@@ -190,6 +182,7 @@ class SelectMapsComponent extends React.Component {
     } else {
 
        console.log("Rendering the map component with maps: ", this.state.maps);
+       console.log("Rendering the map component with conceptNodes: ", this.state.conceptNodes);
     
        // The very cool multi select widget.  It returns a possibly empty array of user selected values.
        return (
@@ -366,7 +359,7 @@ class SSMGraphData extends React.Component {
  
 /**
  * Constructor for this component
- * @param  {Object} a property object that includes the handlePopupStateChange function, the selected 
+ * @param  {Object} a property object that includes the handleRightClick function, the selected 
  *                  label, and the graph function that includes the nodes and links
  * @return {None}
  */
@@ -397,20 +390,6 @@ class SSMGraphData extends React.Component {
         );
       };
 
-/**
- * The on right click handler
- * @param  {Object} the node object that was clicked on.
- * @return {None}
- */
- _handleRightClick_old = node => {
-     this.setState({  
-        showPopup: !this.state.showPopup  
-     });
-	 this.setState((state) => { 
-	   return ({currentNode : node });
-	 });
-     console.log(node);
-  }
 
 /**
  * The render function
@@ -439,20 +418,21 @@ render() {
            ForceGraph3D graphData={data} 
            nodeRelSize={10}
            ref={el => { this.fg = el; }}
-           onNodeClick={this._handleClick}
-           onNodeRightClick={this.props.handlePopupStateChange}
+           onNodeClick={this.props.handleClick}
+           onNodeRightClick={this.props.handleRightClick}
 		   backgroundColor={"darkgrey"}
            nodeAutoColorBy="shape"
            linkDirectionalArrowLength={3}
-           // linkWidth={1}
+           linkWidth={2}
            linkDirectionalArrowRelPos={1}
-           linkColor={() => 'rgba(255,0,0,1.0)'}
+           linkColor={() => 'rgb(255,0,0)'}
+           linkOpacity={1}
            linkThreeObjectExtend={true}
            linkThreeObject={link => {
             // extend link with text sprite
             const sprite = new SpriteText(`${link.sourceName} > ${link.targetName}`);
             sprite.color = 'black';
-            sprite.textHeight = 1.5;
+            sprite.textHeight = 3.0;
             return sprite;
           }}
           linkPositionUpdate={(sprite, { start, end }) => {
@@ -493,8 +473,10 @@ render() {
          selectedLabel: 'test',
          selectedViewOption: 'test',
          selectedPopupOption: 'test',
+         selectedConceptPopupOption: 'test',
          selectedConceptMapOption: 'new',
          showPopup: false,
+         showConceptPopup: false,
          selectedNode: ''
       };
 
@@ -527,8 +509,10 @@ render() {
       this.handleSelectLabelChange = this.handleSelectLabelChange.bind(this);
       this.handleSelectMapsChange = this.handleSelectMapsChange.bind(this);
       this.handleSelectViewChange = this.handleSelectViewChange.bind(this);
-      this.handlePopupStateChange = this.handlePopupStateChange.bind(this);
+      this.handleRightClick = this.handleRightClick.bind(this);
+      this.handleClick = this.handleClick.bind(this);
       this.handlePopupChange = this.handlePopupChange.bind(this);
+      this.handleConceptPopupChange = this.handleConceptPopupChange.bind(this);
       this.handleConceptMapChange = this.handleConceptMapChange.bind(this);
       this.triggerRender = this.triggerRender.bind(this);
       this.setMapData = this.setMapData.bind(this);
@@ -543,6 +527,17 @@ render() {
          setNodesAndLinks : function(nodes, links) {
             this.nodes = nodes;
             this.links = links;
+         },
+
+         appendNodesAndLinks : function(nodes, links) {
+            console.log("appendNodesAndLinks: nodes: ", nodes)
+            console.log("appendNodesAndLinks: links: ", links)
+            if (nodes !== undefined && nodes !==  null && nodes.length !== 0) {
+               this.nodes = this.nodes.concat(nodes);
+            }
+            if (links !== undefined && links !==  null && links.length !== 0) {
+               this.links = this.links.concat(links);
+            }
          }
       };
    }
@@ -555,17 +550,42 @@ render() {
  * @param  {Object} the newly created concept node
  * @return {None}
  */
-
   addConceptNode (theNode) {
+     this.graph.appendNodesAndLinks(theNode, null);
      console.log("in addConceptNode: ", theNode);
-     this.setState((state) => {
-       var savedNodes = [...state.conceptNodes];
-       savedNodes.push(theNode);
-       return ({conceptNodes: savedNodes});
-     });
-  }
-      addConceptLink () {
+     this.setState({
+       conceptNodes: [...this.state.conceptNodes, theNode]
+     })
+  }   
+
+/**
+ * Function to create the ConceptComponent.  It's called when the user has selected 
+ * the link function from the concept map and has selected the node to which to link
+ * the concept. Thus function creates the link and adds it to the conceptLinks array so
+ * it can be properly rendered and eventually stored in the database,
+ * @param  {Object} The concept node
+ * @param  {Object} The node being linked to the concpet node.
+ * @return {None}
+ */
+  addConceptLink (conceptNode, targetNode) {
+     console.log("in addConceptLink: ", targetNode);
+
+     // Create a link connectint the concept and target nodes
+     var theLink = {
+         source: conceptNode.id,
+         target: targetNode.id,
+         sourceName: conceptNode.name,
+         targetName: conceptNode.name,
+         name: conceptNode.name
       }
+     this.graph.appendNodesAndLinks(null, theLink);
+     
+     this.setState({
+       conceptLinks: [...this.state.conceptLinks, theLink]
+     })
+  }
+
+
 /**
  * Callback function to pass to graphDataFunctions.getNodes.  This function is called in
  * the "then" portion of getNodes once the data has been retrieved from the Neo4J datastore. 
@@ -630,13 +650,13 @@ render() {
      switch (selectedViewOption.value) {
          case "all":
              theQuery = this.nodeQuery.replace("LABEL", this.state.selectedLabel);
-             graphDataFunctions.getNodes(theQuery, this.graph, this.triggerRender);
+             graphDataFunctions.getNodes(theQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
              break;
 
          case "roles":
          case "responsibilities":
              theQuery = this.viewDyadQuery.replace("LABEL", this.state.selectedLabel).replace("MAPCLAUSE", mapClause);
-             graphDataFunctions.getNodes(theQuery, this.graph, this.triggerRender);
+             graphDataFunctions.getNodes(theQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
              break;
 
 //             theQuery = this.ringQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "rect
@@ -645,17 +665,17 @@ render() {
 
          case "needs":
              theQuery = this.viewPathQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "diamond").replace("MAPCLAUSE", mapClause);
-             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
+             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
              break;
 
          case "resources":
              theQuery = this.viewPathQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "ellipse").replace("MAPCLAUSE", mapClause);
-             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
+             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
               break;
 
          case "wishes":
              theQuery = this.viewPathQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "star").replace("MAPCLAUSE", mapClause);
-             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
+             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
              break;
 
          default:
@@ -666,18 +686,51 @@ render() {
    };
 
 /**
+ * The on click handler
+ * @param  {Object} the node object that was clicked on.
+ * @return {None}
+ */
+   handleClick(node, event) {
+     const graphDataFunctions = require('./graphDataFunctions');
+     var type = graphDataFunctions.shapeTable[node.shape];
+     console.log(`In handleClick with node: `, node);
+     console.log(`In handleClick with event: `, event);
+     console.log(`In handleClick with showConceptPopup: `, this.state.showConceptPopup);
+     console.log(`In handleClick with selectedConceptPopupOption: `, 
+                  this.state.selectedConceptPopupOption);
+     if (this.state.showConceptPopup == true && this.state.selectedConceptPopupOption == "link") {
+        alert("Linking node " + node.name + " with node " + this.state.selectedNode.name);
+        console.log("Linking node " , node.name , " with node " , this.state.selectedNode.name);
+
+        this.addConceptLink(this.state.selectedNode, node);
+     } else {
+        alert("Node name: " + node.name + "\n" + "Node type: " + type);
+     }
+   };
+
+/**
  * Function passed to the SSMGraphDataCompont component. Function is bound to this context so 
  * that when it is executed in the lower level component, the state will be changed in the
  * parent component representing that the user has toggled the PopupMenu
  * @return {None}
  */
-   handlePopupStateChange(node, event) {
-     console.log(`In handlePopupStateChange with node: `, node);
+   handleRightClick(node, event) {
+     console.log(`In handleRightClick with node: `, node);
+     console.log(`In handleRightClick with event: `, event);
 
-     this.setState(prevState => ({
-       showPopup: !prevState.showPopup
-       }));
+     if (node.shape === "concept") {
+        // THe user clicked on a concept node, let's show the appropriate menu
+        this.setState(prevState => ({
+          showConceptPopup: !prevState.showConceptPopup
+          }));
+     } else {
+        // The user clicked on a "normal" node, let's show the appropriate menu
+        this.setState(prevState => ({
+          showPopup: !prevState.showPopup
+          }));
+     }
 
+     // In either case we want to save the selected node.
      this.setState(prevState => ({
        selectedNode: node
        }));
@@ -738,10 +791,10 @@ render() {
      // ensure the re-render happens once the data is all retrieved.
      if (selectedPopupOption.value === "sub") {
         // Path based queries
-        graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
+        graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
      } else {
         // "Normal node/link queries
-        graphDataFunctions.getNodes(theQuery, this.graph, this.triggerRender);
+        graphDataFunctions.getNodes(theQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
      }
    };
 
@@ -761,6 +814,63 @@ render() {
        { selectedPopupOption: selectedPopupOption.value},
      );
    };
+
+/**
+ * Take action based on the option the user selected. If they are saving or deleting we need
+ * to generate and execute a query.  If they are adding a link we need to arrang things so 
+ * that the next left click on a non-concept node creates the link and add it's it to the
+ * list of in memory links.
+ * @param  {String} The option returned from the user's choice in the select in the lower
+ *                  level component.
+ * @return {None}
+ */
+   processConceptPopupChange(selectedConceptPopupOption) {
+     console.log(`In processConceptPopupChange `, selectedConceptPopupOption);
+     console.log(`In processConceptPopupChange with node`, this.state.selectedNode);
+     console.log(`In processConceptPopupChange with node id`, this.state.selectedNode.ssmId);
+     var theQuery;
+
+     // Once the user makes a selection, they are done with the popup. So let's make it go away
+     // ??? Is this actually the behavior we want here?  Might be awkward for adding multiple links,
+     // but maybe make it easier to be sure we are creating the correct linlk.  Needs mor thought
+     this.setState(prevState => ({
+       showConceptPopup: !prevState.showConceptPopup
+       }));
+
+     // Create the query depending on what the user's selected.
+     switch (selectedConceptPopupOption.value) {
+         case "link":
+             break;
+
+         case "delete":
+             break;
+
+         case "save":
+             break;
+
+         default:
+             console.log ("unsupported option: " + selectedConceptPopupOption.value);
+     }
+     const graphDataFunctions = require('./graphDataFunctions');
+
+   };
+
+
+/**
+ * Function passed to the ConceptPopupComponent component. Function is bound to this context so
+ * that when it is executed in the lower level component, the state will be changed in the
+ * parent component, we can build the needed query, and call the appropriate getNodeData function.
+ * @param  {String} The option returned from the user's choice in the select in the lower
+ *                  level component.
+ * @return {None}
+ */
+   handleConceptPopupChange(selectedConceptPopupOption) {
+     console.log(`In handleConceptPopupChange `, selectedConceptPopupOption);
+     this.setState(
+       { selectedConceptPopupOption: selectedConceptPopupOption.value},
+     );
+   };
+
 
 /**
  * Function passed to the SelectViewComponent component. Function is bound to this context so 
@@ -798,7 +908,7 @@ render() {
 
      // Get the data from Neo4j based on the user selection. Add the callback to
      // ensure the re-render happens once the data is all retrieved.
-     graphDataFunctions.getNodes(realQuery, this.graph, this.triggerRender);
+     graphDataFunctions.getNodes(realQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
 
      console.log("setting state in handleSelectLabelChange");
      this.setState(
@@ -861,7 +971,7 @@ render() {
 
      // Get the data from Neo4j based on the user selection. Add the callback to
      // ensure the re-render happens once the data is all retrieved.
-     graphDataFunctions.getNodes(realQuery, this.graph, this.triggerRender);
+     graphDataFunctions.getNodes(realQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
 
      console.log("setting state in handleSelectMapsChange");
      this.setState(
@@ -905,7 +1015,7 @@ render() {
 
 /**
  * This is the render function for the top-level component.
- * The container is for controls. The SSMGraphData component is the actual graph
+ * The containers are for controls. The SSMGraphData component is the actual graph
  */
    render () {
    return (
@@ -930,11 +1040,17 @@ render() {
             <Col md="auto"><ConceptComponent label={this.state.selectedLabel} 
                                              conceptMap={this.state.selectedConceptMapOption}
                                              addConceptNode={this.addConceptNode}/></Col>
+              <Col md="auto"><ConceptPopupComponent 
+                                showPopup={this.state.showConceptPopup} 
+                                handleConceptPopupChange={this.handleConceptPopupChange}/></Col>
            </Row>   
         </Container>   
         <Container>
            <Row>
-           <Col md="auto"> <SSMGraphData handlePopupStateChange={this.handlePopupStateChange} label={this.state.selectedLabel} graph={this.graph}/> </Col>
+           <Col md="auto"> <SSMGraphData handleRightClick={this.handleRightClick} 
+                                         handleClick={this.handleClick}
+                                         label={this.state.selectedLabel} 
+                                         graph={this.graph}/> </Col>
            </Row>   
         </Container>   
         </div>

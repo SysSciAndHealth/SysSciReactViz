@@ -20,6 +20,7 @@ export default class ConceptComponent extends React.Component {
      this.state = {
         concepts: {},
         selectedOption: [],
+        temporaryId: -1
      };
 
      this.state.concepts[this.props.label] = {};
@@ -43,21 +44,29 @@ export default class ConceptComponent extends React.Component {
 
        console.log("this.props.label ", this.props.label)
 
+       // We are using the temporary for the SSM ID and the ID field.  Note that
+       // the ID field will get replaced when this node is eventually written to Neo4j.
+       // The SSM ID will not be overwritten, but those ids don't have to be unique.
        // Create a new nore dor this concept
        const graphDataFunctions = require('./graphDataFunctions');
-       var thisId = -1
+       var thisId = this.state.temporaryId;
        var thisShape = "concept"
 
        // I don't know why the label is coming in as an array ???
        var thisLabel = this.props.label[0];
        var thisColor = graphDataFunctions.colorTable[thisShape];
-       var thisSSMId = -1
+       var thisSSMId = this.state.temporaryId;
        var thisSourceFile = this.props.conceptMap.value;
 
        var thisNode = { 
            id: thisId, shape: thisShape, label: thisLabel, color: thisColor,
            name:  newConceptName, ssmId: thisSSMId, sourceFile: thisSourceFile
        }
+
+       // Decrement the temporary ID
+       this.setState(prevState => {
+          return {temporaryId: prevState.temporaryId - 1}
+       });   
 
        console.log("New concept node: ", thisNode);
        this.props.addConceptNode(thisNode);

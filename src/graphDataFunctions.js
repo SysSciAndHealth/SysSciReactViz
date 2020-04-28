@@ -9,6 +9,17 @@ export var colorTable = {
        concept: "#cc0000"      // red
 	};
 
+// Mapping between shapes and types.  This probablu should be somewhere else so it can be cahnged
+// without changing it for all instances of the site, but for now it's here
+export var shapeTable = {
+	   circle: "Role",
+	   rectangle: "Responsibility",
+	   diamond: "Need",
+	   ellipse: "Resource",
+	   star: "Wish",
+       concept: "Concept"
+	};
+
 /**
  * This function executes the given query to retrieve data from our Neo4j data store. We use
  * a java script promise to handle the asynchronous nature of the query. In the then clause, we
@@ -18,10 +29,12 @@ export var colorTable = {
  * with the new data.
  * @param  {String} the query to execute
  * @param  {Object} the graph object
+ * @param  {Object} the concept nodes that aren't in the database, but we want to show
+ * @param  {Object} the concept links that aren't in the database, but we want to show
  * @param  {Function} the callback function to execute when the data is ready to render
  * @return {None}
  */
-export function getNodes(query, graphObject, callback) {
+export function getNodes(query, graphObject, conceptNodes, conceptLinks, callback) {
 	// The node list is used to keep track of which nodes have already been added
 	// to the nodes array.  This is needed because the query we are using returns 
 	// both nodes in a relationship, but does not return nodes with no outgoing relationships.
@@ -117,6 +130,10 @@ export function getNodes(query, graphObject, callback) {
     // Set the nodes and links for return in the graph object
     graphObject.setNodesAndLinks(nodes, links);
 
+    // Add any concept nodes
+    console.log("graphDataFunctions appending: " , conceptNodes);
+    graphObject.appendNodesAndLinks(conceptNodes, conceptLinks);
+
     // Now we call the callback so that the parent component knows the data is ready to render.
     if (typeof callback === "function") {
         callback('true');
@@ -136,10 +153,12 @@ export function getNodes(query, graphObject, callback) {
  * form, we need to process it differently, but the end goal is the same.
  * @param  {String} the query to execute
  * @param  {Object} the graph object
+ * @param  {Object} the concept nodes that aren't in the database, but we want to show
+ * @param  {Object} the concept links that aren't in the database, but we want to show
  * @param  {Function} the callback function to execute when the data is ready to render
  * @return {None}
  */
-export function getNodesFromPath(query, graphObject, callback) {
+export function getNodesFromPath(query, graphObject, conceptNodes, conceptLinks, callback) {
 	// The node list is used to keep track of which nodes have already been added
 	// to the nodes array.  This is needed because the query we are using returns 
 	// both nodes in a relationship, but does not return nodes with no outgoing relationships.
@@ -248,6 +267,10 @@ export function getNodesFromPath(query, graphObject, callback) {
 
     // Set the nodes and links for return in the graph object
     graphObject.setNodesAndLinks(nodes, links);
+
+    // Add any concept nodes
+    console.log("graphDataFunctions appending: " , conceptNodes);
+    graphObject.appendNodesAndLinks(conceptNodes, conceptLinks);
 
     // Now we call the callback so that the parent component knows the data is ready to render.
     if (typeof callback === "function") {
