@@ -6,7 +6,9 @@ export var colorTable = {
 	   diamond: "#00bdbd",     // teal
 	   ellipse: "#000000",     // black
 	   star: "#999900",        // yellow-green
-       concept: "#cc0000"      // red
+	   link: "#000000",     // black
+       concept: "#cc0000",     // red,
+	   conceptLink: "#ff0000"     // red
 	};
 
 // Mapping between shapes and types.  This probablu should be somewhere else so it can be cahnged
@@ -59,7 +61,7 @@ export function getNodes(query, graphObject, conceptNodes, conceptLinks, callbac
        console.log("records in getNodes: " , result.records);
        for (var i = 0; i < nRecords; i++) {
 	     // we start by looking at the first node
-         var identity1 = result.records[i]._fields[0].identity;
+         var identity1 = String(result.records[i]._fields[0].identity);
          var thisName = result.records[i]._fields[0].properties["name"];
          var thisTargetName = result.records[i]._fields[2].properties["name"];
 
@@ -85,7 +87,7 @@ export function getNodes(query, graphObject, conceptNodes, conceptLinks, callbac
 		 }
 
 		 // Now let's look at the second node.
-         var identity2 = result.records[i]._fields[2].identity;
+         var identity2 = String(result.records[i]._fields[2].identity);
 
 		 // Have we seen this node already?
 		 if (!(identity2 in nodesAdded)) {
@@ -115,6 +117,7 @@ export function getNodes(query, graphObject, conceptNodes, conceptLinks, callbac
 			target: identity2,
 			sourceName: thisName,
 			targetName: thisTargetName,
+            color: colorTable["link"],
 			name: path.basename(thisSourceFile, 'json')
 			//name: "to"
 		 }
@@ -129,10 +132,6 @@ export function getNodes(query, graphObject, conceptNodes, conceptLinks, callbac
 
     // Set the nodes and links for return in the graph object
     graphObject.setNodesAndLinks(nodes, links);
-
-    // Add any concept nodes
-    console.log("graphDataFunctions appending: " , conceptNodes);
-    graphObject.appendNodesAndLinks(conceptNodes, conceptLinks);
 
     // Now we call the callback so that the parent component knows the data is ready to render.
     if (typeof callback === "function") {
@@ -190,7 +189,7 @@ export function getNodesFromPath(query, graphObject, conceptNodes, conceptLinks,
 
    	        // we start by looking at the first node
             var startNode = thisSegment.start;
-            var identity1 = startNode.identity;
+            var identity1 = String(startNode.identity);
             var thisName = startNode.properties["name"];
             var endNode = thisSegment.end;
             var thisTargetName = endNode.properties["name"];
@@ -217,7 +216,7 @@ export function getNodesFromPath(query, graphObject, conceptNodes, conceptLinks,
              }
 
      		 // Now let's look at the end node in this segment.
-              var identity2 = endNode.identity;
+              var identity2 = String(endNode.identity);
 
 		      // Have we seen this node already?
 		      if (!(identity2 in nodesAdded)) {
@@ -250,6 +249,7 @@ export function getNodesFromPath(query, graphObject, conceptNodes, conceptLinks,
 			        target: identity2,
 			        sourceName: thisName,
 			        targetName: thisTargetName,
+                    color: colorTable["link"],
 			        name: path.basename(thisSourceFile, 'json')
 		         }
 		         links.push(thisLink);
@@ -267,10 +267,6 @@ export function getNodesFromPath(query, graphObject, conceptNodes, conceptLinks,
 
     // Set the nodes and links for return in the graph object
     graphObject.setNodesAndLinks(nodes, links);
-
-    // Add any concept nodes
-    console.log("graphDataFunctions appending: " , conceptNodes);
-    graphObject.appendNodesAndLinks(conceptNodes, conceptLinks);
 
     // Now we call the callback so that the parent component knows the data is ready to render.
     if (typeof callback === "function") {

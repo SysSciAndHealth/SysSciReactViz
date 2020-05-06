@@ -20,7 +20,7 @@ export default class ConceptComponent extends React.Component {
      this.state = {
         concepts: {},
         selectedOption: [],
-        temporaryId: -1
+        temporaryId: 9999999
      };
 
      this.state.concepts[this.props.label] = {};
@@ -37,7 +37,7 @@ export default class ConceptComponent extends React.Component {
     console.log("Concept selected: ", selectedOption);
     var newConceptName;
 
-    if (selectedOption.value == "new") {
+    if (selectedOption.value === "new") {
        newConceptName = prompt("Enter the name of the new concept");
        selectedOption.value = newConceptName;
        selectedOption.label = newConceptName;
@@ -49,17 +49,17 @@ export default class ConceptComponent extends React.Component {
        // The SSM ID will not be overwritten, but those ids don't have to be unique.
        // Create a new nore dor this concept
        const graphDataFunctions = require('./graphDataFunctions');
-       var thisId = this.state.temporaryId;
+       var thisId = String(this.state.temporaryId);
        var thisShape = "concept"
 
        // I don't know why the label is coming in as an array ???
-       var thisLabel = this.props.label[0];
+//       var thisLabel = this.props.label[0];
        var thisColor = graphDataFunctions.colorTable[thisShape];
        var thisSSMId = this.state.temporaryId;
        var thisSourceFile = this.props.conceptMap.value;
 
        var thisNode = { 
-           id: thisId, shape: thisShape, label: thisLabel, color: thisColor,
+           id: thisId, shape: thisShape, label: this.props.label, color: thisColor,
            name:  newConceptName, ssmId: thisSSMId, sourceFile: thisSourceFile
        }
 

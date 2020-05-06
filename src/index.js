@@ -4,18 +4,18 @@ import { Row, Col } from 'react-bootstrap';
 // import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
-import * as util from 'util';
+//import * as util from 'util';
 import { ForceGraph3D } from 'react-force-graph';
 import * as graphDataFunctions from "./graphDataFunctions.js";
 import 'react-sprite';
 import 'three-spritetext';
 import SpriteText from 'three-spritetext';
-import Popup from "reactjs-popup";
+//import Popup from "reactjs-popup";
 import 'bootstrap';
 import 'bootstrap/dist/css/bootstrap.css';
 import 'bootstrap/dist/js/bootstrap.js';
-import Popper from 'popper.js';
-import { Dropdown, MenuItem, DropdownButton } from "react-bootstrap";
+//import Popper from 'popper.js';
+//import { Dropdown, MenuItem, DropdownButton } from "react-bootstrap";
 import Select from 'react-select';
 import ConceptMapComponent from './ConceptMapComponent.js'
 import ConceptComponent from './ConceptComponent.js'
@@ -90,7 +90,7 @@ class SelectLabelComponent extends React.Component {
  */
   render() {
 
-    console.log("Rendering the label component with labels: ", this.state.labels);
+//  console.log("Rendering the label component with labels: ", this.state.labels);
     return (
     <div style={{width: '200px'}}>
        <div className="label">Select A Label</div>
@@ -135,10 +135,10 @@ class SelectMapsComponent extends React.Component {
  * @return {None}
  */
   setMaps (theMaps) {
-     console.log("In setMaps ");
+//   console.log("In setMaps ");
      this.setState((state) => {
        let savedMaps = Object.assign({}, state.maps);
-       console.log(theMaps);
+       //nsole.log(theMaps);
        savedMaps = theMaps;
        return ({maps: savedMaps});
      });
@@ -151,7 +151,7 @@ class SelectMapsComponent extends React.Component {
  * @return {None}
  */
   handleMapsChange(selectedOptions) {
-    console.log("Maps selected: ", selectedOptions);
+    //nsole.log("Maps selected: ", selectedOptions);
     this.props.handleMapChange(selectedOptions);
   }
 
@@ -181,8 +181,7 @@ class SelectMapsComponent extends React.Component {
        return (null);
     } else {
 
-       console.log("Rendering the map component with maps: ", this.state.maps);
-       console.log("Rendering the map component with conceptNodes: ", this.state.conceptNodes);
+ //    console.log("Rendering the map component with maps: ", this.state.maps);
     
        // The very cool multi select widget.  It returns a possibly empty array of user selected values.
        return (
@@ -213,7 +212,7 @@ class SelectViewComponent extends React.Component {
  */
   constructor (props) {
   super (props);
-     console.log("In constructor for SelectViewComponent");
+     //nsole.log("In constructor for SelectViewComponent");
 
      this.state = {
         selectedOption: 'All Nodes',
@@ -239,7 +238,7 @@ class SelectViewComponent extends React.Component {
  * @return {None}
  */
   handleViewChange(selectedOption) {
-    console.log(`Option selected:`, this.state.selectedOption);
+    //nsole.log(`Option selected:`, this.state.selectedOption);
     this.props.handleViewChange(selectedOption);
   }
 
@@ -289,7 +288,7 @@ class PopupComponent extends React.Component {
  */
 constructor (props) {
   super (props);
-     console.log("In constructor for PopupComponent");
+     //nsole.log("In constructor for PopupComponent");
 
      this.state = {
         selectedOption: null,
@@ -312,7 +311,7 @@ constructor (props) {
  * @return {None}
  */
   handlePopupChange(selectedOption) {
-    console.log(`Option selected:`, this.state.selectedOption);
+    //nsole.log(`Option selected:`, this.state.selectedOption);
     this.props.handlePopupChange(selectedOption);
   }
 
@@ -405,11 +404,23 @@ render() {
 
     const inputData = this.props.graph;
 
-    var data = { nodes: inputData.nodes,
-                 links: inputData.links};
+//    var data = { nodes: inputData.nodes,
+//                 links: inputData.links};
 
-    console.log("rendering data from props " , data.nodes);
-    console.log("rendering data from links " , data.links);
+      var data = {};
+      data.nodes = [...inputData.nodes];
+      data.links = [...inputData.links];
+
+ // console.log("rendering nodes " , data.nodes);
+    console.log("********** Nodes to render ****");
+    for (var i = 0; i < data.nodes.length; i++) {
+       console.log("nodes ", data.nodes[i]);
+    }   
+//  console.log("rendering links " , data.links);
+    console.log("********** Links to render ****");
+    for (i = 0; i < data.links.length; i++) {
+       console.log("link ", data.links[i]);
+    }   
 
     return (
       <div>
@@ -417,15 +428,12 @@ render() {
         <div className="theGraph"><
            ForceGraph3D graphData={data} 
            nodeRelSize={10}
-           ref={el => { this.fg = el; }}
            onNodeClick={this.props.handleClick}
            onNodeRightClick={this.props.handleRightClick}
 		   backgroundColor={"darkgrey"}
-           nodeAutoColorBy="shape"
            linkDirectionalArrowLength={3}
            linkWidth={2}
            linkDirectionalArrowRelPos={1}
-           linkColor={() => 'rgb(255,0,0)'}
            linkOpacity={1}
            linkThreeObjectExtend={true}
            linkThreeObject={link => {
@@ -525,20 +533,40 @@ render() {
          nodes : [],
          links : [],
          setNodesAndLinks : function(nodes, links) {
-            this.nodes = nodes;
-            this.links = links;
+            console.log("***************************");
+            console.log("setNodesAndLinks" );
+            for (var i = 0; i < nodes.length; i++) {
+               console.log("added node: " , nodes[i]);
+            }
+            console.log("***************************");
+            for (i = 0; i < links.length; i++) {
+               console.log("added link: " , links[i]);
+            }
+            console.log("***************************");
+            this.nodes = [...nodes];
+            this.links = [...links];
          },
 
-         appendNodesAndLinks : function(nodes, links) {
-            console.log("appendNodesAndLinks: nodes: ", nodes)
-            console.log("appendNodesAndLinks: links: ", links)
+         appendNodeAndLink : function(nodes, links) {
+            console.log("***************************");
+            console.log("current nodes: ", this.nodes)
+            console.log("current links: ", this.links)
+            console.log("nodes to add: ", nodes)
+            console.log("links to add: ", links)
             if (nodes !== undefined && nodes !==  null && nodes.length !== 0) {
-               this.nodes = this.nodes.concat(nodes);
+               let nodeCopy = Object.assign({}, nodes);
+               this.nodes.push(nodeCopy);
             }
             if (links !== undefined && links !==  null && links.length !== 0) {
-               this.links = this.links.concat(links);
+               let linkCopy = Object.assign({}, links);
+               this.links.push(linkCopy);
             }
+            for (var i = 0; i < this.links.length; i++) {
+               console.log("final link: " , this.links[i]);
+            }
+            console.log("***************************");
          }
+
       };
    }
 
@@ -551,7 +579,7 @@ render() {
  * @return {None}
  */
   addConceptNode (theNode) {
-     this.graph.appendNodesAndLinks(theNode, null);
+     this.graph.appendNodeAndLink(theNode, null);
      console.log("in addConceptNode: ", theNode);
      this.setState({
        conceptNodes: [...this.state.conceptNodes, theNode]
@@ -568,17 +596,20 @@ render() {
  * @return {None}
  */
   addConceptLink (conceptNode, targetNode) {
-     console.log("in addConceptLink: ", targetNode);
+     //nsole.log("in addConceptLink: ", targetNode);
+     const graphDataFunctions = require('./graphDataFunctions');
 
-     // Create a link connectint the concept and target nodes
+     // Create a link connecting the concept and target nodes
      var theLink = {
          source: conceptNode.id,
          target: targetNode.id,
          sourceName: conceptNode.name,
-         targetName: conceptNode.name,
+         targetName: targetNode.name,
+         color: graphDataFunctions.colorTable["conceptLink"],
          name: conceptNode.name
       }
-     this.graph.appendNodesAndLinks(null, theLink);
+     console.log("in addConceptLink: link is", theLink);
+     this.graph.appendNodeAndLink(null, theLink);
      
      this.setState({
        conceptLinks: [...this.state.conceptLinks, theLink]
@@ -597,6 +628,16 @@ render() {
  */
    triggerRender(status) {
      console.log(`In triggerRender `);
+     var nodeLength = this.state.conceptNodes.length;
+     for (var i = 0; i < nodeLength; i++) {
+         this.graph.appendNodeAndLink(this.state.conceptNodes[i], null);
+     }    
+
+     var linkLength = this.state.conceptLinks.length;
+     for (i = 0; i < linkLength; i++) {
+         console.log("appending link: ", this.state.conceptLinks[i]);
+         this.graph.appendNodeAndLink(null, this.state.conceptLinks[i]);
+     }    
      this.setState(
        { readyToRender: 'true'},
      );
@@ -630,7 +671,6 @@ render() {
 
      var theQuery;
      // Create the query depending on what the user's selected.
-     var andClause = "";
      var mapClause = this.buildSelectedMapClause(this.state.selectedMaps);
      if (mapClause !== "") {
         mapClause = mapClause.concat(" and ");
@@ -698,7 +738,7 @@ render() {
      console.log(`In handleClick with showConceptPopup: `, this.state.showConceptPopup);
      console.log(`In handleClick with selectedConceptPopupOption: `, 
                   this.state.selectedConceptPopupOption);
-     if (this.state.showConceptPopup == true && this.state.selectedConceptPopupOption == "link") {
+     if (this.state.showConceptPopup === true && this.state.selectedConceptPopupOption === "link") {
         alert("Linking node " + node.name + " with node " + this.state.selectedNode.name);
         console.log("Linking node " , node.name , " with node " , this.state.selectedNode.name);
 
@@ -851,7 +891,6 @@ render() {
          default:
              console.log ("unsupported option: " + selectedConceptPopupOption.value);
      }
-     const graphDataFunctions = require('./graphDataFunctions');
 
    };
 

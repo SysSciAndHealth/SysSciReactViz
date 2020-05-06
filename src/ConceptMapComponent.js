@@ -55,7 +55,7 @@ export default class ConceptMapComponent extends React.Component {
     console.log("Concept map selected: ", selectedOption);
     var newConceptMapName;
 
-    if (selectedOption.value == "new") {
+    if (selectedOption.value === "new") {
        newConceptMapName = prompt("Enter the name of the new concept map");
        selectedOption.value = newConceptMapName;
        selectedOption.label = newConceptMapName;
