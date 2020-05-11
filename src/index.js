@@ -605,6 +605,7 @@ render() {
          sourceName: conceptNode.name,
          targetName: targetNode.name,
          color: graphDataFunctions.colorTable["conceptLink"],
+		 visibility: true,
          name: conceptNode.name
       }
      console.log("in addConceptLink: link is", theLink);
@@ -765,8 +766,10 @@ render() {
         if (this.graph.nodes[i].shape === "concept") {
            if (showConceptNodes) {
               this.graph.nodes[i].visibility = true;
+              filteredNodes[this.graph.nodes[i].id] = 0;
            } else {   
               this.graph.nodes[i].visibility = false;
+              filteredNodes[this.graph.nodes[i].id] = 1;
            }   
         }
      }   

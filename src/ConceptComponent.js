@@ -60,7 +60,7 @@ export default class ConceptComponent extends React.Component {
 
        var thisNode = { 
            id: thisId, shape: thisShape, label: this.props.label, color: thisColor,
-           name:  newConceptName, ssmId: thisSSMId, sourceFile: thisSourceFile
+           name:  newConceptName, ssmId: thisSSMId, sourceFile: thisSourceFile, visibility: true
        }
 
        // Decrement the temporary ID
