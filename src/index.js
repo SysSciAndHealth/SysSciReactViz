@@ -774,9 +774,19 @@ render() {
      // At this point we have created the filtered node list.  Any link which connects
      // to any node in the list should also not be rendered
      console.log("filteredNodes: ", filteredNodes);
+	 var sourceNode;
+	 var targetNode;
      for (i = 0; i < this.graph.links.length; i++) {
-        var sourceNode = this.graph.links[i].source.id;
-        var targetNode = this.graph.links[i].target.id;
+		// OK, so this is abit weird.  Because the react force 3d rendering
+		// can change the value of what is rendered, the links can be in 2 forms here.
+		// Rather than argue about it, we just handle either case. Strange but it works.
+		if (this.graph.links[i].source.id !== undefined) {
+           sourceNode = this.graph.links[i].source.id;
+           targetNode = this.graph.links[i].target.id;
+		} else {
+           sourceNode = this.graph.links[i].source;
+           targetNode = this.graph.links[i].target;
+		}
         console.log("filtering links: source node:" , sourceNode);
         if (filteredNodes[sourceNode] === 1 || filteredNodes[targetNode] === 1){
            console.log("setting visibility for link: ", i);
