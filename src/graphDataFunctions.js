@@ -58,7 +58,7 @@ export function getNodes(query, graphObject, conceptNodes, conceptLinks, callbac
     nodeResult.then(result => {
        var nRecords = result.records.length;
        console.log("nRecords in getNodes is: " + nRecords);
-       console.log("records in getNodes: " , result.records);
+ //    console.log("records in getNodes: " , result.records);
        for (var i = 0; i < nRecords; i++) {
 	     // we start by looking at the first node
          var identity1 = String(result.records[i]._fields[0].identity);
@@ -77,12 +77,12 @@ export function getNodes(query, graphObject, conceptNodes, conceptLinks, callbac
            
            var thisNode = 
            { id: identity1, shape: thisShape, label: thisLabel, color: thisColor,
-             name:  thisName, ssmId: thisSSMId, sourceFile: thisSourceFile
+             name:  thisName, ssmId: thisSSMId, sourceFile: thisSourceFile, visibility: true
            }
            
            if (thisNode.shape !== "noBorder") {
              nodes.push(thisNode);
-             console.log(result.records[i]);
+//           console.log(result.records[i]);
            }
 		 }
 
@@ -101,7 +101,7 @@ export function getNodes(query, graphObject, conceptNodes, conceptLinks, callbac
            
            thisNode = 
            { id: identity2, shape: thisShape, label: thisLabel, color: thisColor,
-             name:  thisTargetName, ssmId: thisSSMId, sourceFile: thisSourceFile
+             name:  thisTargetName, ssmId: thisSSMId, sourceFile: thisSourceFile, visibility: true
            }
            
            if (thisNode.shape !== "noBorder") {
@@ -118,8 +118,8 @@ export function getNodes(query, graphObject, conceptNodes, conceptLinks, callbac
 			sourceName: thisName,
 			targetName: thisTargetName,
             color: colorTable["link"],
+            visibility: true,
 			name: path.basename(thisSourceFile, 'json')
-			//name: "to"
 		 }
 
 		 links.push(thisLink);
@@ -206,7 +206,8 @@ export function getNodesFromPath(query, graphObject, conceptNodes, conceptLinks,
            
                var thisNode = 
                { id: identity1, shape: thisShape, label: thisLabel, color: thisColor,
-                 name:  thisName, ssmId: thisSSMId, sourceFile: thisSourceFile
+                 name:  thisName, ssmId: thisSSMId, sourceFile: thisSourceFile,
+                 visibility: true
                }
            
                if (thisNode.shape !== "noBorder") {
@@ -230,7 +231,8 @@ export function getNodesFromPath(query, graphObject, conceptNodes, conceptLinks,
                 
                 thisNode = 
                 { id: identity2, shape: thisShape, label: thisLabel, color: thisColor,
-                  name:  thisTargetName, ssmId: thisSSMId, sourceFile: thisSourceFile
+                  name:  thisTargetName, ssmId: thisSSMId, sourceFile: thisSourceFile,
+                  visibility: true
                 }
            
                 if (thisNode.shape !== "noBorder") {
@@ -250,6 +252,7 @@ export function getNodesFromPath(query, graphObject, conceptNodes, conceptLinks,
 			        sourceName: thisName,
 			        targetName: thisTargetName,
                     color: colorTable["link"],
+                    visibility: true,
 			        name: path.basename(thisSourceFile, 'json')
 		         }
 		         links.push(thisLink);

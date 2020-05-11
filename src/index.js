@@ -38,7 +38,6 @@ class SelectLabelComponent extends React.Component {
         labels: [],
         selectedOption: '',
         labelQuery: 'MATCH (n) RETURN distinct labels(n)',
-        mapQuery: 'MATCH (n) RETURN distinct n.sourcefile, labels(n)'
 
      };
 
@@ -122,11 +121,11 @@ class SelectMapsComponent extends React.Component {
      this.state = {
         maps: {},
         selectedOptions: [],
-        mapQuery: 'MATCH (n) RETURN distinct n.sourcefile, labels(n)'
+        distinctLabelQuery: 'MATCH (n) RETURN distinct n.sourcefile, labels(n)'
      };
 
      this.handleMapsChange = this.handleMapsChange.bind(this);
-     graphDataFunctions.getMaps(this.state.mapQuery, this);
+     graphDataFunctions.getMaps(this.state.distinctLabelQuery, this);
   }
 
 /**
@@ -373,7 +372,7 @@ class SSMGraphData extends React.Component {
   }
 
 /**
- * The on click handler
+ * The on click handler. Currently unused
  * @param  {Object} the node object that was clicked on.
  * @return {None}
  */
@@ -413,14 +412,10 @@ render() {
 
  // console.log("rendering nodes " , data.nodes);
     console.log("********** Nodes to render ****");
-    for (var i = 0; i < data.nodes.length; i++) {
-       console.log("nodes ", data.nodes[i]);
-    }   
+    console.log("nodes ", data.nodes);
 //  console.log("rendering links " , data.links);
     console.log("********** Links to render ****");
-    for (i = 0; i < data.links.length; i++) {
-       console.log("link ", data.links[i]);
-    }   
+    console.log("links ", data.links);
 
     return (
       <div>
@@ -430,6 +425,8 @@ render() {
            nodeRelSize={10}
            onNodeClick={this.props.handleClick}
            onNodeRightClick={this.props.handleRightClick}
+           nodeVisibility={"visibility"}
+           linkVisibility={"visibility"}
 		   backgroundColor={"darkgrey"}
            linkDirectionalArrowLength={3}
            linkWidth={2}
@@ -479,7 +476,7 @@ render() {
          conceptLinks: [],
          readyToRender: 'false',
          selectedLabel: 'test',
-         selectedViewOption: 'test',
+         selectedViewOption: '',
          selectedPopupOption: 'test',
          selectedConceptPopupOption: 'test',
          selectedConceptMapOption: 'new',
@@ -535,6 +532,7 @@ render() {
          setNodesAndLinks : function(nodes, links) {
             console.log("***************************");
             console.log("setNodesAndLinks" );
+ /*           
             for (var i = 0; i < nodes.length; i++) {
                console.log("added node: " , nodes[i]);
             }
@@ -542,6 +540,7 @@ render() {
             for (i = 0; i < links.length; i++) {
                console.log("added link: " , links[i]);
             }
+ */           
             console.log("***************************");
             this.nodes = [...nodes];
             this.links = [...links];
@@ -638,6 +637,11 @@ render() {
          console.log("appending link: ", this.state.conceptLinks[i]);
          this.graph.appendNodeAndLink(null, this.state.conceptLinks[i]);
      }    
+
+    console.log("calling this.filterNodesAndLinksFromSelectViewChange with: ", 
+                this.state.selectedViewOption);
+    this.filterNodesAndLinksFromSelectViewChange(this.state.selectedViewOption, true);
+
      this.setState(
        { readyToRender: 'true'},
      );
@@ -658,6 +662,134 @@ render() {
      });
   }
 
+
+/**
+ * Filter the node and link lists based on the selectedViewOption.  This avoids a query to the
+ * database and is a lot easier to understand and code than the old way.  We simply set the
+ * visibility of all of the nodes we don't want to see to false, than any link that has either
+ * node not visible is also marked as not visible.
+ * @param  {String} The option returned from the user's choice in the select in the lower
+ *                  level component.
+ * @return {None}
+ */
+   filterNodesAndLinksFromSelectViewChange(selectedViewOption, showConceptNodes) {
+     console.log(`In filterNodesAndLinksFromSelectViewChange `, selectedViewOption);
+     console.log("length of node array: ", this.graph.nodes.length);
+     var filteredNodes = {};
+     var i = 0;
+     if (selectedViewOption === undefined || 
+        selectedViewOption ===  null || selectedViewOption.length === 0) {
+        // No filtering has been asked for, let's not do any.
+        return;
+     }   
+
+     switch (selectedViewOption) {
+         case "all":
+             for (i = 0; i < this.graph.nodes.length; i++) {
+               this.graph.nodes[i].visibility = true;
+               filteredNodes[this.graph.nodes[i].id]  = 0;
+             }
+             for (i = 0; i < this.graph.links.length; i++) {
+               this.graph.links[i].visibility = true;
+             }
+             break;
+
+         case "roles":
+         case "responsibilities":
+             for (i = 0; i < this.graph.nodes.length; i++) {
+                if (this.graph.nodes[i].shape !== "circle" && 
+                    this.graph.nodes[i].shape !== "rectangle"){
+                   console.log("unsetting visibility for node: ", i);
+                   this.graph.nodes[i].visibility = false;
+                   filteredNodes[this.graph.nodes[i].id] = 1;
+                } else {
+                   this.graph.nodes[i].visibility = true;
+                   filteredNodes[this.graph.nodes[i].id] = 0;
+                }
+             }
+             break;
+
+         case "needs":
+             for (i = 0; i < this.graph.nodes.length; i++) {
+                if (this.graph.nodes[i].shape !== "diamond" && 
+                    this.graph.nodes[i].shape !== "rectangle"){
+                   console.log("unsetting visibility for node: ", i);
+                   this.graph.nodes[i].visibility = false;
+                   filteredNodes[this.graph.nodes[i].id] = 1;
+                } else {
+                   this.graph.nodes[i].visibility = true;
+                   filteredNodes[this.graph.nodes[i].id] = 0;
+                }
+             }
+             break;
+
+         case "resources":
+             for (i = 0; i < this.graph.nodes.length; i++) {
+                if (this.graph.nodes[i].shape !== "diamond" && 
+                    this.graph.nodes[i].shape !== "ellipse" && 
+                    this.graph.nodes[i].shape !== "rectangle"){
+                   console.log("unsetting visibility for node: ", i);
+                   this.graph.nodes[i].visibility = false;
+                   filteredNodes[this.graph.nodes[i].id] = 1;
+                } else {
+                   this.graph.nodes[i].visibility = true;
+                   filteredNodes[this.graph.nodes[i].id] = 0;
+                }
+             }
+              break;
+
+         case "wishes":
+             for (i = 0; i < this.graph.nodes.length; i++) {
+                if (this.graph.nodes[i].shape !== "diamond" && 
+                    this.graph.nodes[i].shape !== "ellipse" && 
+                    this.graph.nodes[i].shape !== "star" && 
+                    this.graph.nodes[i].shape !== "rectangle"){
+                   console.log("unsetting visibility for node: ", i);
+                   this.graph.nodes[i].visibility = false;
+                   filteredNodes[this.graph.nodes[i].id] = 1;
+                } else {
+                   this.graph.nodes[i].visibility = true;
+                   filteredNodes[this.graph.nodes[i].id] = 0;
+                }
+             }    
+             break;
+
+         default:
+             console.log ("unsupported view option: " + selectedViewOption);
+             return;
+     }
+
+     // One more thing: we want to handle conceptNodes. They are truned off or on 
+     // with the showConceptNodes flad
+     for (i = 0; i < this.graph.nodes.length; i++) {
+        if (this.graph.nodes[i].shape === "concept") {
+           if (showConceptNodes) {
+              this.graph.nodes[i].visibility = true;
+           } else {   
+              this.graph.nodes[i].visibility = false;
+           }   
+        }
+     }   
+
+     // At this point we have created the filtered node list.  Any link which connects
+     // to any node in the list should also not be rendered
+     console.log("filteredNodes: ", filteredNodes);
+     for (i = 0; i < this.graph.links.length; i++) {
+        var sourceNode = this.graph.links[i].source.id;
+        var targetNode = this.graph.links[i].target.id;
+        console.log("filtering links: source node:" , sourceNode);
+        if (filteredNodes[sourceNode] === 1 || filteredNodes[targetNode] === 1){
+           console.log("setting visibility for link: ", i);
+           this.graph.links[i].visibility = false;
+        } else { 
+           this.graph.links[i].visibility = true;
+        }
+     }
+
+     // Now we can re-render
+//     this.triggerRender();
+   };
+
 /**
  * Create a query based on the option the user selected, then call the getNodes function to
  * get the data from the Neo4J database.  We also pass in the callback function that triggers
@@ -667,6 +799,9 @@ render() {
  * @return {None}
  */
    getNodeDataFromSelectViewChange(selectedViewOption) {
+      this.filterNodesAndLinksFromSelectViewChange(selectedViewOption.value, true);
+   }
+   getNodeDataFromSelectViewChange2(selectedViewOption) {
      console.log(`In getNodeDataFromSelectViewChange `, selectedViewOption);
 
      var theQuery;
@@ -680,9 +815,9 @@ render() {
      console.log ("map clauses: " + mapClause);
 
      /* This case statement could easily be confusing.  The point of this code is to present a set
-      * of nodes to the user for viewing/sorting by ring. The user always wants to see the Responsibilities.
+      * of nodes for viewing/sorting by ring. The user always wants to see the Responsibilities.
       * If the user is viewing either the Roles or Responsibilities, we show both of those rings for some
-      * context. But if the user is viewing one of the "outer rings" we want to show all of the nodes in the
+      * context. But if the user is viewing one of the "outer rings" we show all of the nodes in the
       * full path to the Responsibilities.  This requires a different query, and a different function to
       * retrieve the nodes from the database.
       */
