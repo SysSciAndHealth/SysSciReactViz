@@ -18,13 +18,14 @@ export default class ConceptMapComponent extends React.Component {
      super (props);
 
      this.state = {
-        conceptMaps: {},
+        conceptMaps: [],
         selectedOption: [],
         conceptMapQuery: 'MATCH (n) where n.shape = "concept" RETURN distinct n.sourcefile, labels(n)'
      };
 
-     this.state.conceptMaps[this.props.label] = {};
-     this.state.conceptMaps[this.props.label]["maps"] = {value: "none", label: "none"};
+     this.theOptions = [];
+ //  this.state.conceptMaps[this.props.label] = {};
+ //  this.state.conceptMaps[this.props.label]["maps"] = {value: "none", label: "none"};
      this.handleConceptMapsChange = this.handleConceptMapsChange.bind(this);
      const graphDataFunctions = require('./graphDataFunctions');
      graphDataFunctions.getMaps(this.state.conceptMapQuery, this);
@@ -71,6 +72,7 @@ export default class ConceptMapComponent extends React.Component {
  */
   // This function is called when the user changes the value of the select object
   handleChange = selectedOption => {
+    
     this.setState(
       { selectedOption },
       () => this.handleConceptMapsChange(selectedOption)
@@ -85,25 +87,27 @@ export default class ConceptMapComponent extends React.Component {
 
     // This seems to catch the case where we are trying to render this component before we
     // have the map data from the promise.
-    var theOptions = [];
-    if (this.state.conceptMaps[this.props.label] === undefined || this.state.conceptMaps.length === 0) {
-       // Let's not try to render what isn't there.
-       theOptions[0] = {value: "new", label: "new"};
-    } else {
-       theOptions = this.state.conceptMaps[this.props.label]["maps"];
+	this.theOptions = [];
+    this.theOptions[0] = {value: "new", label: "Add A New Concept Map"};
+    if (this.state.conceptMaps[this.props.label] !== undefined 
+	    && this.state.conceptMaps.length !== 0) {
+       this.theOptions = this.theOptions.concat(this.state.conceptMaps[this.props.label]["maps"]);
     }
 
-    console.log("Rendering the concepts component with label: ", this.props.label);
-    console.log("Rendering the concepts component with options: ", theOptions);
+    if (typeof this.handleChange !== "function") {
+	   return null;
+	}
+    console.log("Rendering the concept map  component with label: ", this.props.label);
+    console.log("Rendering the concept map  component with options: ", this.theOptions);
 
     // The very cool select widget.  It returns a possibly empty array of user selected values.
     return (
-    <div style={{width: '200px'}}>
+    <div style={{width: '400px'}}>
        <div className="conceptMaps">Select Concept Map</div>
       <Select
         onChange={this.handleChange}
         value={this.selectedOption}
-        options={theOptions}
+        options={this.theOptions}
       />
     </div>
     );

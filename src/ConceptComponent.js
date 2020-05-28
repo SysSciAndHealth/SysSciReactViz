@@ -16,16 +16,24 @@ export default class ConceptComponent extends React.Component {
  */
   constructor (props) {
      super (props);
+     console.log("intitializing concept component");
 
      this.state = {
         concepts: {},
         selectedOption: [],
-        temporaryId: 9999999
      };
 
      this.state.concepts[this.props.label] = {};
      this.state.concepts[this.props.label]["maps"] = {value: "none", label: "none"};
      this.handleConceptChange = this.handleConceptChange.bind(this);
+
+	 this.theOptions =[
+        {value: "new", label: "Add A New Concept"},
+        {value: "link", label: "Link Selected Concept"},
+        {value: "deleteConcept", label: "Delete SelectedConcept"},
+        {value: "deleteLink", label: "Delete Selected Link"},
+        {value: "save", label: "Save All Concepts and Links"}
+	 ]
   }
 
 /**
@@ -39,8 +47,9 @@ export default class ConceptComponent extends React.Component {
 
     if (selectedOption.value === "new") {
        newConceptName = prompt("Enter the name of the new concept");
-       selectedOption.value = newConceptName;
-       selectedOption.label = newConceptName;
+       if (newConceptName === null) {
+	      return;
+	   }
 
        console.log("this.props.label ", this.props.label)
 
@@ -49,29 +58,27 @@ export default class ConceptComponent extends React.Component {
        // The SSM ID will not be overwritten, but those ids don't have to be unique.
        // Create a new nore dor this concept
        const graphDataFunctions = require('./graphDataFunctions');
-       var thisId = String(this.state.temporaryId);
+	   var generatedId = Date.now();
        var thisShape = "concept"
 
        // I don't know why the label is coming in as an array ???
 //       var thisLabel = this.props.label[0];
        var thisColor = graphDataFunctions.colorTable[thisShape];
-       var thisSSMId = this.state.temporaryId;
+       var thisSSMId = generatedId;
        var thisSourceFile = this.props.conceptMap.value;
 
        var thisNode = { 
-           id: thisId, shape: thisShape, label: this.props.label, color: thisColor,
+           id: generatedId, shape: thisShape, label: this.props.label, color: thisColor,
            name:  newConceptName, ssmId: thisSSMId, sourceFile: thisSourceFile, visibility: true
        }
-
-       // Decrement the temporary ID
-       this.setState(prevState => {
-          return {temporaryId: prevState.temporaryId - 1}
-       });   
 
        console.log("New concept node: ", thisNode);
        this.props.addConceptNode(thisNode);
 
+
     }   
+
+	this.props.handleConceptChange(selectedOption);
 
     //this.props.handleSortChange(selectedOptions);
   }
@@ -97,25 +104,16 @@ export default class ConceptComponent extends React.Component {
 
     // This seems to catch the case where we are trying to render this component before we
     // have the map data from the promise.
-    var theOptions = [];
-    if (this.state.concepts[this.props.label] === undefined || this.state.concepts.length === 0) {
-       // Let's not try to render what isn't there.
-       theOptions[0] = {value: "new", label: "new"};
-    } else {
-       theOptions = this.state.concepts[this.props.label]["maps"];
-    }
-
-    console.log("Rendering the concepts component with label: ", this.props.label);
-    console.log("Rendering the concepts component with options: ", theOptions);
+    console.log("rendering the concept component");
 
     // The very cool select widget.  It returns a possibly empty array of user selected values.
     return (
-    <div style={{width: '200px'}}>
-       <div className="concepts">Select A Concept</div>
+    <div style={{width: '400px'}}>
+       <div className="concepts">Concept Menu</div>
       <Select
         onChange={this.handleChange}
         value={this.selectedOption}
-        options={theOptions}
+        options={this.theOptions}
       />
     </div>
     );

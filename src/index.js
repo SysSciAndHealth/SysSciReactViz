@@ -17,6 +17,8 @@ import 'bootstrap/dist/js/bootstrap.js';
 //import Popper from 'popper.js';
 //import { Dropdown, MenuItem, DropdownButton } from "react-bootstrap";
 import Select from 'react-select';
+
+// Other app components
 import ConceptMapComponent from './ConceptMapComponent.js'
 import ConceptComponent from './ConceptComponent.js'
 import ConceptPopupComponent from './ConceptPopupComponent.js'
@@ -121,7 +123,7 @@ class SelectMapsComponent extends React.Component {
      this.state = {
         maps: {},
         selectedOptions: [],
-        distinctLabelQuery: 'MATCH (n) RETURN distinct n.sourcefile, labels(n)'
+        distinctLabelQuery: 'MATCH (n) where n.shape <> "concept" RETURN distinct n.sourcefile, labels(n)'
      };
 
      this.handleMapsChange = this.handleMapsChange.bind(this);
@@ -425,6 +427,8 @@ render() {
            nodeRelSize={10}
            onNodeClick={this.props.handleClick}
            onNodeRightClick={this.props.handleRightClick}
+		   onLinkClick={this.props.handleLinkClick}
+		   onLinkRightClick={this.props.handleLinkRightClick}
            nodeVisibility={"visibility"}
            linkVisibility={"visibility"}
 		   backgroundColor={"darkgrey"}
@@ -479,24 +483,31 @@ render() {
          selectedViewOption: '',
          selectedPopupOption: 'test',
          selectedConceptPopupOption: 'test',
-         selectedConceptMapOption: 'new',
+         selectedConceptMapOption: {value: "none", label: "none"},
+         selectedConceptOption: 'new',
          showPopup: false,
          showConceptPopup: false,
-         selectedNode: ''
+         selectedNode: '',
+         selectedLink: ''
       };
 
       // Set the default querys.  LABEL will be replaced with what the user selected.
       // This quert gives all the nodes for a given label.  All the other queries used to return
       // nodes also include the label.
       this.nodesByLabelQuery = 'MATCH (n:`LABEL`)-[r]->(a) RETURN n,type(r),a';
+
+	  // This query is used to add nodes with no relationships into the graph. The
+	  // most common time this will happen is when a concept node has been added and there are no links
+	  // to it.
+	  this.orphanQuery = 'MATCH (n:`LABEL`) WHERE NOT (n)-[*]-() and n.shape <> "noBorder" and n.sourcefile = "MAP" RETURN n';
       this.mapQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE RETURN n,type(r),a';
 
       // QUeries used in the view menu to select a subset of rings to view. Note that these
       // queries are set up to always show at least the responsibilities nodes and the complete path
       // to get there
-      this.viewDyadQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE a.shape = "rectangle" RETURN n,type(r),a';
-      this.viewAllNodeQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE RETURN n,type(r),a';
-      this.viewPathQuery ='MATCH p = (b)-[*0..]->(n:`LABEL`)-[*0..]->(a) MAPCLAUSE  a.shape = "SHAPE" and b.shape = "rectangle" RETURN p';
+//    this.viewDyadQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE a.shape = "rectangle" RETURN n,type(r),a';
+//    this.viewAllNodeQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE RETURN n,type(r),a';
+//    this.viewPathQuery ='MATCH p = (b)-[*0..]->(n:`LABEL`)-[*0..]->(a) MAPCLAUSE  a.shape = "SHAPE" and b.shape = "rectangle" RETURN p';
 
 
       // Queries for the popup menu
@@ -515,10 +526,13 @@ render() {
       this.handleSelectMapsChange = this.handleSelectMapsChange.bind(this);
       this.handleSelectViewChange = this.handleSelectViewChange.bind(this);
       this.handleRightClick = this.handleRightClick.bind(this);
+      this.handleLinkClick = this.handleLinkClick.bind(this);
+      this.handleLinkRightClick = this.handleLinkRightClick.bind(this);
       this.handleClick = this.handleClick.bind(this);
       this.handlePopupChange = this.handlePopupChange.bind(this);
       this.handleConceptPopupChange = this.handleConceptPopupChange.bind(this);
       this.handleConceptMapChange = this.handleConceptMapChange.bind(this);
+      this.handleConceptChange = this.handleConceptChange.bind(this);
       this.triggerRender = this.triggerRender.bind(this);
       this.setMapData = this.setMapData.bind(this);
       this.addConceptNode = this.addConceptNode.bind(this);
@@ -532,15 +546,6 @@ render() {
          setNodesAndLinks : function(nodes, links) {
             console.log("***************************");
             console.log("setNodesAndLinks" );
- /*           
-            for (var i = 0; i < nodes.length; i++) {
-               console.log("added node: " , nodes[i]);
-            }
-            console.log("***************************");
-            for (i = 0; i < links.length; i++) {
-               console.log("added link: " , links[i]);
-            }
- */           
             console.log("***************************");
             this.nodes = [...nodes];
             this.links = [...links];
@@ -579,6 +584,9 @@ render() {
  */
   addConceptNode (theNode) {
      this.graph.appendNodeAndLink(theNode, null);
+     const graphDataFunctions = require('./graphDataFunctions');
+	 graphDataFunctions.writeANode(theNode, this.readyToRender);
+
      console.log("in addConceptNode: ", theNode);
      this.setState({
        conceptNodes: [...this.state.conceptNodes, theNode]
@@ -639,9 +647,10 @@ render() {
          this.graph.appendNodeAndLink(null, this.state.conceptLinks[i]);
      }    
 
-    console.log("calling this.filterNodesAndLinksFromSelectViewChange with: ", 
+    console.log("calling this.filterNodesAndLinks with: ", 
                 this.state.selectedViewOption);
-    this.filterNodesAndLinksFromSelectViewChange(this.state.selectedViewOption, true);
+    this.filterNodesAndLinks(this.state.selectedViewOption, 
+                             this.state.selectedConceptMapOption, true);
 
      this.setState(
        { readyToRender: 'true'},
@@ -663,108 +672,158 @@ render() {
      });
   }
 
+/**
+ * Is this node in one of the user selected maps.  If so, retrun true, otherwise false.
+ * @param  {String} The node to check
+ * @param  {Array}  The array of user selected maps.
+ *                 
+ * @return {Boolean} True if the node is in one of the selected maps, otherwise false.
+ */
+   isNodeInMapList(node, selectedMaps) {
+ //  console.log("isNodeInMapList selectedMaps: ", selectedMaps);
+ //  console.log("isNodeInMapList node: ", node);
+     if (selectedMaps === undefined || 
+        selectedMaps ===  null || selectedMaps.length === 0) {
+           // No maps selected: By default we want to show all maps
+           // so we return true
+           return true;
+     }
+     for (var i = 0; i < selectedMaps.length; i++) {
+  //    console.log("comparing " + node.sourcefile + " to " + selectedMaps[i].value);
+        if (node.sourceFile === selectedMaps[i].value) {
+   //      console.log("node found returning true  node: ", node);
+           // The node is in a selected map.
+           return true;
+        }
+     }
+ 
+     // If we got here, it wasn't found
+    //onsole.log("node not found returning false  node: ", node);
+     return false;
+   }
 
 /**
- * Filter the node and link lists based on the selectedViewOption.  This avoids a query to the
+ * Filter the node and link lists based on the selectedViewOption. This avoids a query to the
  * database and is a lot easier to understand and code than the old way.  We simply set the
- * visibility of all of the nodes we don't want to see to false, than any link that has either
+ * visibility of all of the nodes we don't want to see to false: any link that has either
  * node not visible is also marked as not visible.
  * @param  {String} The option returned from the user's choice in the select in the lower
  *                  level component.
+ * @param  {String} Whether or not we are showing concept nodes.
+ *                 
  * @return {None}
  */
-   filterNodesAndLinksFromSelectViewChange(selectedViewOption, showConceptNodes) {
-     console.log(`In filterNodesAndLinksFromSelectViewChange `, selectedViewOption);
+   filterNodesAndLinks(selectedViewOption, selectedConceptMapOption, showConceptNodes) {
+     console.log("***************************");
+     console.log(`In filterNodesAndLinks `, selectedViewOption);
      console.log("length of node array: ", this.graph.nodes.length);
+     console.log("selectedMaps of node array: ", this.state.selectedMaps);
+     console.log("selectedViewOption: ", selectedViewOption);
+     console.log("***************************");
      var filteredNodes = {};
      var i = 0;
-     if (selectedViewOption === undefined || 
-        selectedViewOption ===  null || selectedViewOption.length === 0) {
-        // No filtering has been asked for, let's not do any.
-        return;
-     }   
+     if (selectedViewOption !== undefined && 
+        selectedViewOption !==  null && selectedViewOption.length !== 0) {
+        // No view filtering has been asked for, let's not do any.
 
-     switch (selectedViewOption) {
-         case "all":
-             for (i = 0; i < this.graph.nodes.length; i++) {
-               this.graph.nodes[i].visibility = true;
-               filteredNodes[this.graph.nodes[i].id]  = 0;
-             }
-             for (i = 0; i < this.graph.links.length; i++) {
-               this.graph.links[i].visibility = true;
-             }
-             break;
-
-         case "roles":
-         case "responsibilities":
-             for (i = 0; i < this.graph.nodes.length; i++) {
-                if (this.graph.nodes[i].shape !== "circle" && 
-                    this.graph.nodes[i].shape !== "rectangle"){
-                   console.log("unsetting visibility for node: ", i);
-                   this.graph.nodes[i].visibility = false;
-                   filteredNodes[this.graph.nodes[i].id] = 1;
-                } else {
-                   this.graph.nodes[i].visibility = true;
-                   filteredNodes[this.graph.nodes[i].id] = 0;
-                }
-             }
-             break;
-
-         case "needs":
-             for (i = 0; i < this.graph.nodes.length; i++) {
-                if (this.graph.nodes[i].shape !== "diamond" && 
-                    this.graph.nodes[i].shape !== "rectangle"){
-                   console.log("unsetting visibility for node: ", i);
-                   this.graph.nodes[i].visibility = false;
-                   filteredNodes[this.graph.nodes[i].id] = 1;
-                } else {
-                   this.graph.nodes[i].visibility = true;
-                   filteredNodes[this.graph.nodes[i].id] = 0;
-                }
-             }
-             break;
-
-         case "resources":
-             for (i = 0; i < this.graph.nodes.length; i++) {
-                if (this.graph.nodes[i].shape !== "diamond" && 
-                    this.graph.nodes[i].shape !== "ellipse" && 
-                    this.graph.nodes[i].shape !== "rectangle"){
-                   console.log("unsetting visibility for node: ", i);
-                   this.graph.nodes[i].visibility = false;
-                   filteredNodes[this.graph.nodes[i].id] = 1;
-                } else {
-                   this.graph.nodes[i].visibility = true;
-                   filteredNodes[this.graph.nodes[i].id] = 0;
-                }
-             }
-              break;
-
-         case "wishes":
-             for (i = 0; i < this.graph.nodes.length; i++) {
-                if (this.graph.nodes[i].shape !== "diamond" && 
-                    this.graph.nodes[i].shape !== "ellipse" && 
-                    this.graph.nodes[i].shape !== "star" && 
-                    this.graph.nodes[i].shape !== "rectangle"){
-                   console.log("unsetting visibility for node: ", i);
-                   this.graph.nodes[i].visibility = false;
-                   filteredNodes[this.graph.nodes[i].id] = 1;
-                } else {
-                   this.graph.nodes[i].visibility = true;
-                   filteredNodes[this.graph.nodes[i].id] = 0;
-                }
-             }    
-             break;
-
-         default:
-             console.log ("unsupported view option: " + selectedViewOption);
-             return;
+       // Start with filtering by selectedView
+       switch (selectedViewOption) {
+           case "all":
+               for (i = 0; i < this.graph.nodes.length; i++) {
+                 if (this.isNodeInMapList(this.graph.nodes[i], this.state.selectedMaps)) {
+                    this.graph.nodes[i].visibility = true;
+                    filteredNodes[this.graph.nodes[i].id]  = 0;
+                 } else {
+                    this.graph.nodes[i].visibility = false;
+                    filteredNodes[this.graph.nodes[i].id] = 1;
+                 }
+               }
+   /*
+               for (i = 0; i < this.graph.links.length; i++) {
+                 this.graph.links[i].visibility = true;
+               }
+   */
+               break;
+   
+           case "roles":
+           case "responsibilities":
+               for (i = 0; i < this.graph.nodes.length; i++) {
+                  if ((this.graph.nodes[i].shape !== "circle" && 
+                      this.graph.nodes[i].shape !== "rectangle") || 
+                      (!this.isNodeInMapList(this.graph.nodes[i], this.state.selectedMaps))) {
+                     console.log("unsetting visibility for node: ", i);
+                     this.graph.nodes[i].visibility = false;
+                     filteredNodes[this.graph.nodes[i].id] = 1;
+                  } else {
+                     this.graph.nodes[i].visibility = true;
+                     filteredNodes[this.graph.nodes[i].id] = 0;
+                  }
+               }
+               break;
+   
+           case "needs":
+               for (i = 0; i < this.graph.nodes.length; i++) {
+                  if ((this.graph.nodes[i].shape !== "diamond" && 
+                      this.graph.nodes[i].shape !== "rectangle") ||
+                      (!this.isNodeInMapList(this.graph.nodes[i], this.state.selectedMaps))) {
+                     console.log("unsetting visibility for node: ", i);
+                     this.graph.nodes[i].visibility = false;
+                     filteredNodes[this.graph.nodes[i].id] = 1;
+                  } else {
+                     this.graph.nodes[i].visibility = true;
+                     filteredNodes[this.graph.nodes[i].id] = 0;
+                  }
+               }
+               break;
+   
+           case "resources":
+               for (i = 0; i < this.graph.nodes.length; i++) {
+                  if ((this.graph.nodes[i].shape !== "diamond" && 
+                      this.graph.nodes[i].shape !== "ellipse" && 
+                      this.graph.nodes[i].shape !== "rectangle") ||
+                      (!this.isNodeInMapList(this.graph.nodes[i], this.state.selectedMaps))) {
+                     console.log("unsetting visibility for node: ", i);
+                     this.graph.nodes[i].visibility = false;
+                     filteredNodes[this.graph.nodes[i].id] = 1;
+                  } else {
+                     this.graph.nodes[i].visibility = true;
+                     filteredNodes[this.graph.nodes[i].id] = 0;
+                  }
+               }
+                break;
+   
+           case "wishes":
+               for (i = 0; i < this.graph.nodes.length; i++) {
+                  if ((this.graph.nodes[i].shape !== "diamond" && 
+                      this.graph.nodes[i].shape !== "ellipse" && 
+                      this.graph.nodes[i].shape !== "star" && 
+                      this.graph.nodes[i].shape !== "rectangle") ||
+                      (!this.isNodeInMapList(this.graph.nodes[i], this.state.selectedMaps))) {
+                     console.log("unsetting visibility for node: ", i);
+                     this.graph.nodes[i].visibility = false;
+                     filteredNodes[this.graph.nodes[i].id] = 1;
+                  } else {
+                     this.graph.nodes[i].visibility = true;
+                     filteredNodes[this.graph.nodes[i].id] = 0;
+                  }
+               }    
+               break;
+   
+           default:
+               console.log ("unsupported view option: " + selectedViewOption);
+               return;
+       }
      }
 
-     // One more thing: we want to handle conceptNodes. They are truned off or on 
-     // with the showConceptNodes flad
+     // One more thing: we want to handle conceptNodes. They are turned off or on 
+     // with the showConceptNodes flag: This needs to be updated to handle the 
+     // "Concept Maps"
+     console.log("filtering concepts for map: ", selectedConceptMapOption);
      for (i = 0; i < this.graph.nodes.length; i++) {
         if (this.graph.nodes[i].shape === "concept") {
-           if (showConceptNodes) {
+           var conceptMapForThisNode = this.graph.nodes[i].sourceFile;
+           if (showConceptNodes && 
+               conceptMapForThisNode === selectedConceptMapOption.value) {
               this.graph.nodes[i].visibility = true;
               filteredNodes[this.graph.nodes[i].id] = 0;
            } else {   
@@ -812,8 +871,12 @@ render() {
  * @return {None}
  */
    getNodeDataFromSelectViewChange(selectedViewOption) {
-      this.filterNodesAndLinksFromSelectViewChange(selectedViewOption.value, true);
+      this.filterNodesAndLinks(selectedViewOption.value, true);
    }
+
+
+   // This code will eventually be removed (I think: if I was sure it would be gone now!)
+   /*
    getNodeDataFromSelectViewChange2(selectedViewOption) {
      console.log(`In getNodeDataFromSelectViewChange `, selectedViewOption);
 
@@ -833,18 +896,18 @@ render() {
       * context. But if the user is viewing one of the "outer rings" we show all of the nodes in the
       * full path to the Responsibilities.  This requires a different query, and a different function to
       * retrieve the nodes from the database.
-      */
+      
      const graphDataFunctions = require('./graphDataFunctions');
      switch (selectedViewOption.value) {
          case "all":
              theQuery = this.nodeQuery.replace("LABEL", this.state.selectedLabel);
-             graphDataFunctions.getNodes(theQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
+             graphDataFunctions.getNodes(theQuery, this.graph, this.triggerRender);
              break;
 
          case "roles":
          case "responsibilities":
              theQuery = this.viewDyadQuery.replace("LABEL", this.state.selectedLabel).replace("MAPCLAUSE", mapClause);
-             graphDataFunctions.getNodes(theQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
+             graphDataFunctions.getNodes(theQuery, this.graph,  this.triggerRender);
              break;
 
 //             theQuery = this.ringQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "rect
@@ -853,17 +916,17 @@ render() {
 
          case "needs":
              theQuery = this.viewPathQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "diamond").replace("MAPCLAUSE", mapClause);
-             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
+             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
              break;
 
          case "resources":
              theQuery = this.viewPathQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "ellipse").replace("MAPCLAUSE", mapClause);
-             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
+             graphDataFunctions.getNodesFromPath(theQuery, this.graph,  this.triggerRender);
               break;
 
          case "wishes":
              theQuery = this.viewPathQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "star").replace("MAPCLAUSE", mapClause);
-             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
+             graphDataFunctions.getNodesFromPath(theQuery, this.graph,  this.triggerRender);
              break;
 
          default:
@@ -872,6 +935,18 @@ render() {
      console.log ("theQuery: " + theQuery);
 
    };
+*/
+/**
+ * The on link click handler
+ * @param  {Object} the node object that was clicked on.
+ * @return {None}
+ */
+   handleLinkClick(link, event) {
+
+     alert("Link name: " + link.name + "\n" + 
+           "Source: " + link.sourceName + "\n" +
+           "Target: " + link.targetName);
+   };
 
 /**
  * The on click handler
@@ -879,18 +954,28 @@ render() {
  * @return {None}
  */
    handleClick(node, event) {
+
      const graphDataFunctions = require('./graphDataFunctions');
      var type = graphDataFunctions.shapeTable[node.shape];
      console.log(`In handleClick with node: `, node);
      console.log(`In handleClick with event: `, event);
-     console.log(`In handleClick with showConceptPopup: `, this.state.showConceptPopup);
-     console.log(`In handleClick with selectedConceptPopupOption: `, 
-                  this.state.selectedConceptPopupOption);
-     if (this.state.showConceptPopup === true && this.state.selectedConceptPopupOption === "link") {
-        alert("Linking node " + node.name + " with node " + this.state.selectedNode.name);
-        console.log("Linking node " , node.name , " with node " , this.state.selectedNode.name);
-
-        this.addConceptLink(this.state.selectedNode, node);
+     console.log(`In handleClick with selectedConceptOption: `, 
+                  this.state.selectedConceptOption);
+     if (this.state.selectedNode.shape === "concept" && 
+         this.state.selectedConceptOption.value === "link") {
+        if (this.state.selectedNode.id === node.id) {
+           alert("Linking node to itself is not allowed");
+           return;
+        }  else {
+           var confirmText = 
+             "Linking node " + node.name + " with node " + this.state.selectedNode.name;
+           if (window.confirm(confirmText)) {
+              console.log(confirmText);
+              const graphDataFunctions = require('./graphDataFunctions');
+		      graphDataFunctions.writeALink(this.state.selectedNode, node, null);
+              this.addConceptLink(this.state.selectedNode, node);
+           }
+        }
      } else {
         alert("Node name: " + node.name + "\n" + "Node type: " + type);
      }
@@ -905,23 +990,61 @@ render() {
    handleRightClick(node, event) {
      console.log(`In handleRightClick with node: `, node);
      console.log(`In handleRightClick with event: `, event);
-
      if (node.shape === "concept") {
-        // THe user clicked on a concept node, let's show the appropriate menu
-        this.setState(prevState => ({
-          showConceptPopup: !prevState.showConceptPopup
-          }));
-     } else {
-        // The user clicked on a "normal" node, let's show the appropriate menu
-        this.setState(prevState => ({
-          showPopup: !prevState.showPopup
-          }));
-     }
+	   // Setting node to selected node color"
+       console.log(`In handleRightClick setting node color`);
+	   if (node.color === graphDataFunctions.colorTable["concept"]) {
+	      // Node is not selected so swith to the selected color
+          node.color = graphDataFunctions.colorTable["conceptSelected"];
 
-     // In either case we want to save the selected node.
-     this.setState(prevState => ({
-       selectedNode: node
-       }));
+          // Mark this as the selected node
+          this.setState(prevState => ({
+            selectedNode: node
+          }));
+       } else {
+	      // Node is already selected so swith to the basic color
+          node.color = graphDataFunctions.colorTable["concept"];
+
+          // No node is currently selected
+          this.setState(prevState => ({
+            selectedNode: ''
+          }));
+	   }
+	 }  
+	 return;
+   };
+
+/**
+ * Function passed to the SSMGraphDataCompont component. Function is bound to this context so
+ * that when it is executed in the lower level component, the state will be changed in the
+ * parent component representing that the user has toggled the PopupMenu
+ * @return {None}
+ */
+   handleLinkRightClick(link, event) {
+     console.log(`In handleRightLinkClick with link: `, link);
+     console.log(`In handleRightLinkClick with event: `, event);
+     
+     if (link.color === graphDataFunctions.colorTable["link"]) {
+       // This is not a concept link so there is nothing to fdo
+       return
+     }
+     if (link.color === graphDataFunctions.colorTable["conceptLink"]) {
+        // Node is not selected so swith to the selected color
+        link.color = graphDataFunctions.colorTable["conceptLinkSelected"];
+
+        // Mark this as the selected node
+        this.setState(prevState => ({
+          selectedLink: link
+         }));
+     } else {
+        // Node is already selected so swith to the basic color
+        link.color = graphDataFunctions.colorTable["conceptLink"];
+
+        // No node is currently selected
+        this.setState(prevState => ({
+          selectedlink: ''
+        }));
+     }
    };
 
 /**
@@ -979,10 +1102,10 @@ render() {
      // ensure the re-render happens once the data is all retrieved.
      if (selectedPopupOption.value === "sub") {
         // Path based queries
-        graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
+        graphDataFunctions.getNodesFromPath(theQuery, this.graph,  this.triggerRender);
      } else {
         // "Normal node/link queries
-        graphDataFunctions.getNodes(theQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
+        graphDataFunctions.getNodes(theQuery, this.graph, this.triggerRender);
      }
    };
 
@@ -1017,13 +1140,14 @@ render() {
      console.log(`In processConceptPopupChange with node`, this.state.selectedNode);
      console.log(`In processConceptPopupChange with node id`, this.state.selectedNode.ssmId);
      var theQuery;
+     const graphDataFunctions = require('./graphDataFunctions');
 
      // Once the user makes a selection, they are done with the popup. So let's make it go away
      // ??? Is this actually the behavior we want here?  Might be awkward for adding multiple links,
      // but maybe make it easier to be sure we are creating the correct linlk.  Needs mor thought
-     this.setState(prevState => ({
-       showConceptPopup: !prevState.showConceptPopup
-       }));
+//   this.setState(prevState => ({
+//     showConceptPopup: !prevState.showConceptPopup
+//     }));
 
      // Create the query depending on what the user's selected.
      switch (selectedConceptPopupOption.value) {
@@ -1034,6 +1158,9 @@ render() {
              break;
 
          case "save":
+		     graphDataFunctions.writeNodesAndLinks(this.state.conceptNodes, 
+			                                       this.state.conceptLinks,
+												   this.readyToRender);
              break;
 
          default:
@@ -1053,6 +1180,7 @@ render() {
  */
    handleConceptPopupChange(selectedConceptPopupOption) {
      console.log(`In handleConceptPopupChange `, selectedConceptPopupOption);
+     this.processConceptPopupChange(selectedConceptPopupOption);
      this.setState(
        { selectedConceptPopupOption: selectedConceptPopupOption.value},
      );
@@ -1073,6 +1201,8 @@ render() {
      // Call the getNodeDataFromSelectViewChange function to build the correct query 
      // and make the getNodes call.
      this.getNodeDataFromSelectViewChange(selectedViewOption)
+     this.filterNodesAndLinks(selectedViewOption,
+                              this.state.selectedConceptMapOption, false);
      this.setState(
        { selectedViewOption: selectedViewOption.value},
      );
@@ -1092,10 +1222,16 @@ render() {
      const graphDataFunctions = require('./graphDataFunctions');
      var realQuery = this.nodesByLabelQuery.replace("LABEL", selectedLabel.value);
      console.log("handleSelectLabelChange ", realQuery);
+     console.log("handleSelectLabelChange ", this.state.selectedConceptMapOption);
+
+	 var realOrphanQuery = this.orphanQuery.replace("LABEL", selectedLabel.value).replace("MAP", this.state.selectedConceptMapOption.value);
+     console.log("handleSelectLabelChange ", realOrphanQuery);
 
      // Get the data from Neo4j based on the user selection. Add the callback to
      // ensure the re-render happens once the data is all retrieved.
-     graphDataFunctions.getNodes(realQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
+     graphDataFunctions.getNodes(realQuery, this.graph, this.triggerRender);
+     this.filterNodesAndLinks(this.state.selectedViewOption, 
+                              this.state.selectedConceptMapOption, true);
 
      console.log("setting state in handleSelectLabelChange");
      this.setState(
@@ -1135,8 +1271,9 @@ render() {
           }
        }
        mapClause = mapClause.concat(")")
+       mapClause = mapClause.concat('or (n.shape = "concept")');
      }
-
+     
      return (mapClause);
   }
 
@@ -1158,7 +1295,9 @@ render() {
 
      // Get the data from Neo4j based on the user selection. Add the callback to
      // ensure the re-render happens once the data is all retrieved.
-     graphDataFunctions.getNodes(realQuery, this.graph, this.state.conceptNodes, this.state.conceptLinks, this.triggerRender);
+     graphDataFunctions.getNodes(realQuery, this.graph, this.triggerRender);
+     this.filterNodesAndLinks(this.state.selectedViewOption, 
+                              this.state.selectedConceptMapOption, true);
 
      console.log("setting state in handleSelectMapsChange");
      this.setState(
@@ -1195,11 +1334,27 @@ render() {
      // Make an appropriate call to get the concept map nodes and link
      // and make the getNodes call.
  //  this.getConceptMapNodesAndLinks(selectedConceptMapOption)
+     this.filterNodesAndLinks(this.state.selectedViewOption, selectedConceptMapOption, true)
      this.setState(
        { selectedConceptMapOption: selectedConceptMapOption},
      );
    };  
 
+/**
+ * Function passed to the Concept component. Function is bound to this context so
+ * that when it is executed in the lower level component, the state will be changed in the
+ * parent component and we will know what the user selection was
+ * @param  {String} The option returned from the user's choice in the select in the lower
+ *                  level component.
+ * @return {None}
+ */
+   handleConceptChange(selectedConceptOption) {
+     console.log(`In handleConceptChange `, selectedConceptOption);
+
+     this.setState(
+       { selectedConceptOption: selectedConceptOption},
+     );
+   };
 /**
  * This is the render function for the top-level component.
  * The containers are for controls. The SSMGraphData component is the actual graph
@@ -1225,7 +1380,9 @@ render() {
             <Col md="auto"><ConceptMapComponent handleConceptMapChange={this.handleConceptMapChange}
                                                 label={this.state.selectedLabel}/></Col>
             <Col md="auto"><ConceptComponent label={this.state.selectedLabel} 
+                                             link={this.state.selectedLink}
                                              conceptMap={this.state.selectedConceptMapOption}
+                                             handleConceptChange={this.handleConceptChange}
                                              addConceptNode={this.addConceptNode}/></Col>
               <Col md="auto"><ConceptPopupComponent 
                                 showPopup={this.state.showConceptPopup} 
@@ -1236,6 +1393,8 @@ render() {
            <Row>
            <Col md="auto"> <SSMGraphData handleRightClick={this.handleRightClick} 
                                          handleClick={this.handleClick}
+                                         handleLinkClick={this.handleLinkClick}
+                                         handleLinkRightClick={this.handleLinkRightClick}
                                          label={this.state.selectedLabel} 
                                          graph={this.graph}/> </Col>
            </Row>   

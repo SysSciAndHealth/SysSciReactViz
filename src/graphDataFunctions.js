@@ -8,6 +8,8 @@ export var colorTable = {
 	   star: "#999900",        // yellow-green
 	   link: "#000000",     // black
        concept: "#cc0000",     // red,
+       conceptSelected: "#FF8C00",     // orange/gold,
+       conceptLinkSelected: "#FF8C00",     // orange/gold,
 	   conceptLink: "#ff0000"     // red
 	};
 
@@ -22,6 +24,146 @@ export var shapeTable = {
        concept: "Concept"
 	};
 
+
+/**
+ * This function writes a single link to the database. It's used when the user.
+ * having creates a concept node.
+ * @param  {Object} the node to add
+ * @param  {Function} the callback function to execute when the data is ready to render
+ * @return {None}
+ */
+export function writeALink(sourceNode, targetNode, callback) {
+
+    // Pull the connection info from the ,env file.  Copy and change template.env
+    const neo4j = require('neo4j-driver');
+    const driver = neo4j.driver(process.env.REACT_APP_BOLT_URL,
+                                 neo4j.auth.basic(process.env.REACT_APP_BOLT_USER,
+                                 process.env.REACT_APP_BOLT_PASSWORD));
+    const session = driver.session({defaultAccessMode: neo4j.session.WRITE});
+
+    var i;
+    var thisLabel = targetNode.label[0];
+	var theQuery;
+    var linkToInsert;
+	var linkQuery = 'MATCH (c:`LABEL`),(n:`LABEL` ) where c.id  = C_ID and id(n) = N_ID MERGE (c)-[r:`REL`]->(n)';
+	theQuery = linkQuery.replace(/LABEL/g, thisLabel)
+                        .replace("C_ID", sourceNode.id)
+                        .replace("N_ID", targetNode.id)
+						.replace("REL", sourceNode.name);
+
+
+    console.log("writeALink: theQuery is: ", theQuery);
+    const insertResult = session.writeTransaction(async txc => {
+       var result = await txc.run(theQuery);
+    });
+
+    insertResult.then(result => {
+       // Now we call the callback so that the parent component knows the data is ready to render.
+       if (typeof callback === "function") {
+           callback('true');
+       }
+    });
+}
+
+/**
+ * This function writes a single nodes to the database. It's used when the user.
+ * having creates a concept node.
+ * @param  {Object} the node to add
+ * @param  {Function} the callback function to execute when the data is ready to render
+ * @return {None}
+ */
+export function writeANode(thisNode, callback) {
+
+    // Pull the connection info from the ,env file.  Copy and change template.env
+    const neo4j = require('neo4j-driver');
+    const driver = neo4j.driver(process.env.REACT_APP_BOLT_URL,
+                                 neo4j.auth.basic(process.env.REACT_APP_BOLT_USER,
+                                 process.env.REACT_APP_BOLT_PASSWORD));
+    const session = driver.session({defaultAccessMode: neo4j.session.WRITE});
+
+    var i;
+    var thisLabel;
+    var nodeToInsert;
+
+    const insertResult = session.writeTransaction(async txc => {
+       thisLabel = thisNode.label;
+       nodeToInsert = 
+       {  name: thisNode.name, id: thisNode.id, 
+          shape: thisNode.shape, sourcefile: thisNode.sourceFile
+       }  
+
+	   var stringNode = JSON.stringify(nodeToInsert);
+
+	   // The query can't have quotation marks in the property names.
+	   // stringify outs them in and this line takes them out!
+	   var unQuotedNode = stringNode.replace(/"([^"]+)":/g, '$1:');
+       console.log("writeNodesAndLinks: unQuotedNode is: ", unQuotedNode);
+       
+       var theQuery = 'Merge (n:`' +  thisLabel +  '` ' + unQuotedNode + ')' ;
+       console.log("writeANode: theQuery is: ", theQuery);
+       var result = await txc.run(theQuery);
+    });
+    insertResult.then(result => {
+       // Now we call the callback so that the parent component knows the data is ready to render.
+       if (typeof callback === "function") {
+           callback('true');
+       }
+    });
+
+}
+
+
+/**
+ * This function writes te provided nodes and links to the database. It's used when the user.
+ * having created one or more conceptMaps, concepts and links decides to save the created objects.
+ * @param  {Object} the nodes to add
+ * @param  {Object} the links to add
+ * @param  {Function} the callback function to execute when the data is ready to render
+ * @return {None}
+ */
+export function writeNodesAndLinks(nodes, links, callback) {
+
+    // Pull the connection info from the ,env file.  Copy and change template.env
+    const neo4j = require('neo4j-driver');
+    const driver = neo4j.driver(process.env.REACT_APP_BOLT_URL,
+                                 neo4j.auth.basic(process.env.REACT_APP_BOLT_USER,
+                                 process.env.REACT_APP_BOLT_PASSWORD));
+    const session = driver.session({defaultAccessMode: neo4j.session.WRITE});
+
+    var i;
+    var thisNode;
+    var thisLabel;
+    var nodeToInsert;
+
+    const insertResult = session.writeTransaction(async txc => {
+       for (i = 0; i < nodes.length; i++) {
+          thisNode = nodes[i];
+          thisLabel = nodes[i].label[0];
+          nodeToInsert = 
+          {  name: thisNode.name, id: thisNode.id, 
+             shape: thisNode.shape, sourcefile: thisNode.sourceFile
+          }  
+
+		  var stringNode = JSON.stringify(nodeToInsert);
+
+		  // The query can't have quotation marks in the property names.
+		  // stringify outs them in and this line takes them out!
+		  var unQuotedNode = stringNode.replace(/"([^"]+)":/g, '$1:');
+          console.log("writeNodesAndLinks: unQuotedNode is: ", unQuotedNode);
+          
+          var theQuery = "Merge (n:" + thisLabel + " " + unQuotedNode + ")" ;
+          console.log("writeNodesAndLinks: theQuery is: ", theQuery);
+          var result = await txc.run(theQuery);
+       }
+    });
+    insertResult.then(result => {
+       // Now we call the callback so that the parent component knows the data is ready to render.
+       if (typeof callback === "function") {
+           callback('true');
+       }
+    });
+
+}
 /**
  * This function executes the given query to retrieve data from our Neo4j data store. We use
  * a java script promise to handle the asynchronous nature of the query. In the then clause, we
@@ -31,12 +173,10 @@ export var shapeTable = {
  * with the new data.
  * @param  {String} the query to execute
  * @param  {Object} the graph object
- * @param  {Object} the concept nodes that aren't in the database, but we want to show
- * @param  {Object} the concept links that aren't in the database, but we want to show
  * @param  {Function} the callback function to execute when the data is ready to render
  * @return {None}
  */
-export function getNodes(query, graphObject, conceptNodes, conceptLinks, callback) {
+export function getNodes(query, graphObject, callback) {
 	// The node list is used to keep track of which nodes have already been added
 	// to the nodes array.  This is needed because the query we are using returns 
 	// both nodes in a relationship, but does not return nodes with no outgoing relationships.
@@ -46,13 +186,16 @@ export function getNodes(query, graphObject, conceptNodes, conceptLinks, callbac
     var links = [];
 	
     // Pull the connection info from the ,env file.  Copy and change template.env
-    const neo4j = require('neo4j-driver').v1;
+    const neo4j = require('neo4j-driver');
     const driver = neo4j.driver(process.env.REACT_APP_BOLT_URL,
                                  neo4j.auth.basic(process.env.REACT_APP_BOLT_USER, 
                                  process.env.REACT_APP_BOLT_PASSWORD));
     const session = driver.session();
-    const nodeResult = session.run(query)
+    const nodeResult = session.run(query);
     var path = require('path');
+	var node1Shape;
+	var node2Shape;
+	var conceptLinkType;
     console.log("query in getNodes is: " + query);
 
     nodeResult.then(result => {
@@ -84,6 +227,10 @@ export function getNodes(query, graphObject, conceptNodes, conceptLinks, callbac
              nodes.push(thisNode);
 //           console.log(result.records[i]);
            }
+		   node1Shape = thisShape;
+		   if (thisShape === "concept") {
+		      conceptLinkType = thisSourceFile;
+		   }	  
 		 }
 
 		 // Now let's look at the second node.
@@ -103,6 +250,10 @@ export function getNodes(query, graphObject, conceptNodes, conceptLinks, callbac
            { id: identity2, shape: thisShape, label: thisLabel, color: thisColor,
              name:  thisTargetName, ssmId: thisSSMId, sourceFile: thisSourceFile, visibility: true
            }
+		   node2Shape = thisShape;
+		   if (thisShape === "concept") {
+		      conceptLinkType = thisSourceFile;
+		   }	  
            
            if (thisNode.shape !== "noBorder") {
              nodes.push(thisNode);
@@ -112,14 +263,24 @@ export function getNodes(query, graphObject, conceptNodes, conceptLinks, callbac
 		 } // end of second node loop
 		 // Now let's add a link.  Each record represents the 2 nodes and the link, so there is no
 		 // testing or exclusions or repeats to worry about.
+		 var linkColor = colorTable["link"];
+		 var theLinkType = path.basename(thisSourceFile, 'json');
+
+		 // We change the color and link name if a concept node is involved
+		 if (node1Shape === "concept" || node2Shape === "concept") {
+		    linkColor = colorTable["conceptLink"];
+			node1Shape = "";
+			node2Shape = "";
+			theLinkType = conceptLinkType;
+		 }
 		 var thisLink = {
 		    source: identity1,
 			target: identity2,
 			sourceName: thisName,
 			targetName: thisTargetName,
-            color: colorTable["link"],
+            color: linkColor,
             visibility: true,
-			name: path.basename(thisSourceFile, 'json')
+			name: theLinkType
 		 }
 
 		 links.push(thisLink);
@@ -152,12 +313,10 @@ export function getNodes(query, graphObject, conceptNodes, conceptLinks, callbac
  * form, we need to process it differently, but the end goal is the same.
  * @param  {String} the query to execute
  * @param  {Object} the graph object
- * @param  {Object} the concept nodes that aren't in the database, but we want to show
- * @param  {Object} the concept links that aren't in the database, but we want to show
  * @param  {Function} the callback function to execute when the data is ready to render
  * @return {None}
  */
-export function getNodesFromPath(query, graphObject, conceptNodes, conceptLinks, callback) {
+export function getNodesFromPath(query, graphObject, callback) {
 	// The node list is used to keep track of which nodes have already been added
 	// to the nodes array.  This is needed because the query we are using returns 
 	// both nodes in a relationship, but does not return nodes with no outgoing relationships.
@@ -169,7 +328,7 @@ export function getNodesFromPath(query, graphObject, conceptNodes, conceptLinks,
     var path = require('path');
 	
     // Pull the connection info from the ,env file.  Copy and change template.env
-    const neo4j = require('neo4j-driver').v1;
+    const neo4j = require('neo4j-driver');
     const driver = neo4j.driver(process.env.REACT_APP_BOLT_URL,
                                  neo4j.auth.basic(process.env.REACT_APP_BOLT_USER, 
                                  process.env.REACT_APP_BOLT_PASSWORD));
@@ -294,7 +453,7 @@ export function getNodesFromPath(query, graphObject, conceptNodes, conceptLinks,
 export function getLabels(query, labelObject) {
 	
     // Pull the connection info from the ,env file.  Copy and change template.env
-    const neo4j = require('neo4j-driver').v1;
+    const neo4j = require('neo4j-driver');
     const driver = neo4j.driver(process.env.REACT_APP_BOLT_URL,
                                  neo4j.auth.basic(process.env.REACT_APP_BOLT_USER, 
                                  process.env.REACT_APP_BOLT_PASSWORD));
@@ -334,7 +493,7 @@ export function getLabels(query, labelObject) {
 export function getMaps(query, mapObject) {
 	
     // Pull the connection info from the ,env file.  Copy and change template.env
-    const neo4j = require('neo4j-driver').v1;
+    const neo4j = require('neo4j-driver');
     const driver = neo4j.driver(process.env.REACT_APP_BOLT_URL,
                                  neo4j.auth.basic(process.env.REACT_APP_BOLT_USER, 
                                  process.env.REACT_APP_BOLT_PASSWORD));
