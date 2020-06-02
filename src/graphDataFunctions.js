@@ -45,7 +45,7 @@ export function writeALink(sourceNode, targetNode, callback) {
     var thisLabel = targetNode.label[0];
 	var theQuery;
     var linkToInsert;
-	var linkQuery = 'MATCH (c:`LABEL`),(n:`LABEL` ) where c.id  = C_ID and id(n) = N_ID MERGE (c)-[r:`REL`]->(n)';
+	var linkQuery = 'MATCH (c:`LABEL`),(n:`LABEL` ) where id(c)  = C_ID and id(n) = N_ID MERGE (c)-[r:`REL`]->(n)';
 	theQuery = linkQuery.replace(/LABEL/g, thisLabel)
                         .replace("C_ID", sourceNode.id)
                         .replace("N_ID", targetNode.id)
@@ -64,6 +64,48 @@ export function writeALink(sourceNode, targetNode, callback) {
        }
     });
 }
+
+/**
+ * This function deletes a single link to the database. 
+ * @param  {Object} the node to add
+ * @param  {Function} the callback function to execute when the data is ready to render
+ * @return {None}
+ */
+export function deleteALink(sourceNode, targetNode, callback) {
+
+    // Pull the connection info from the ,env file.  Copy and change template.env
+    const neo4j = require('neo4j-driver');
+    const driver = neo4j.driver(process.env.REACT_APP_BOLT_URL,
+                                 neo4j.auth.basic(process.env.REACT_APP_BOLT_USER,
+                                 process.env.REACT_APP_BOLT_PASSWORD));
+    const session = driver.session({defaultAccessMode: neo4j.session.WRITE});
+
+    var i;
+    var thisLabel = targetNode.label[0];
+    var theQuery;
+    var linkToInsert;
+    var linkQuery = 
+'MATCH (c:`LABEL` )-[r:`REL`]->(n:`LABEL`) where id(c) = C_ID and id(n) = N_ID DELETE r';
+    theQuery = linkQuery.replace(/LABEL/g, thisLabel)
+                        .replace("C_ID", sourceNode.id)
+                        .replace("N_ID", targetNode.id)
+                        .replace("REL", sourceNode.name);
+
+
+    console.log("deleteALink: theQuery is: ", theQuery);
+    const deleteResult = session.writeTransaction(async txc => {
+       var result = await txc.run(theQuery);
+    });
+
+    deleteResult.then(result => {
+       // Now we call the callback so that the parent component knows the data is ready to render.
+       if (typeof callback === "function") {
+           callback('true');
+       }
+    });
+}
+
+
 
 /**
  * This function writes a single nodes to the database. It's used when the user.
@@ -106,7 +148,7 @@ export function writeANode(thisNode, callback) {
     insertResult.then(result => {
        // Now we call the callback so that the parent component knows the data is ready to render.
        if (typeof callback === "function") {
-           callback('true');
+           callback(thisNode);
        }
     });
 
@@ -176,12 +218,68 @@ export function writeNodesAndLinks(nodes, links, callback) {
  * @param  {Function} the callback function to execute when the data is ready to render
  * @return {None}
  */
+export function getSingleNode(query, callback) {
+	
+    // Pull the connection info from the ,env file.  Copy and change template.env
+    const neo4j = require('neo4j-driver');
+    const driver = neo4j.driver(process.env.REACT_APP_BOLT_URL,
+                                 neo4j.auth.basic(process.env.REACT_APP_BOLT_USER, 
+                                 process.env.REACT_APP_BOLT_PASSWORD));
+    const session = driver.session();
+    const nodeResult = session.run(query);
+    var path = require('path');
+    console.log("query in getSingleNode is: " + query);
+
+    nodeResult.then(result => {
+	   // This should be a 
+       var nRecords = result.records.length;
+       console.log("nRecords in getSingleNode is: " + nRecords);
+       for (var i = 0; i < nRecords; i++) {
+         console.log("thisRecord in getSingleNode is: " , result);
+	     // we start by looking at the first node
+         var identity1 = String(result.records[i]._fields[0].identity);
+         var thisName = result.records[i]._fields[0].properties["name"];
+         var thisLabel = result.records[i]._fields[0].labels;
+         var thisShape = result.records[i]._fields[0].properties["shape"];
+         var thisColor = colorTable[thisShape];
+         var thisSSMId = result.records[i]._fields[0].properties["id"];
+         var thisSourceFile = result.records[i]._fields[0].properties["sourcefile"];
+           
+         var thisNode = 
+           { id: identity1, shape: thisShape, label: thisLabel, color: thisColor,
+             name:  thisName, ssmId: thisSSMId, sourceFile: thisSourceFile, visibility: true
+           }
+	   }
+
+       session.close();
+       driver.close();
+
+      // Now we call the callback so that the parent component knows the data is ready to render.
+      if (typeof callback === "function") {
+          callback(thisNode);
+      }
+    });
+}
+
+/**
+ * This function executes the given query to retrieve data from our Neo4j data store. We use
+ * a java script promise to handle the asynchronous nature of the query. In the then clause, we
+ * construct arrays of nodes and links that conform to the react force graph requirements and call 
+ * the setNodesAndLinks function of the graphObject to set add the arrays to the object.  Finally
+ * we call then provide callback function to ensure that the individual components will be re-rendered
+ * with the new data.
+ * @param  {String} the query to execute
+ * @param  {Object} the graph object
+ * @param  {Function} the callback function to execute when the data is ready to render
+ * @return {None}
+ */
 export function getNodes(query, graphObject, callback) {
 	// The node list is used to keep track of which nodes have already been added
 	// to the nodes array.  This is needed because the query we are using returns 
 	// both nodes in a relationship, but does not return nodes with no outgoing relationships.
 	// The query also doesn't return any non-connected nodes, but that should be OK.
     var nodesAdded = {};
+    var nodesAddedShape = {};
     var nodes = [];
     var links = [];
 	
@@ -193,8 +291,6 @@ export function getNodes(query, graphObject, callback) {
     const session = driver.session();
     const nodeResult = session.run(query);
     var path = require('path');
-	var node1Shape;
-	var node2Shape;
 	var conceptLinkType;
     console.log("query in getNodes is: " + query);
 
@@ -214,6 +310,7 @@ export function getNodes(query, graphObject, callback) {
 		   nodesAdded[identity1] = 1;
            var thisLabel = result.records[i]._fields[0].labels;
            var thisShape = result.records[i]._fields[0].properties["shape"];
+		   nodesAddedShape[identity1] = thisShape;
            var thisColor = colorTable[thisShape];
            var thisSSMId = result.records[i]._fields[0].properties["id"];
            var thisSourceFile = result.records[i]._fields[0].properties["sourcefile"];
@@ -227,7 +324,6 @@ export function getNodes(query, graphObject, callback) {
              nodes.push(thisNode);
 //           console.log(result.records[i]);
            }
-		   node1Shape = thisShape;
 		   if (thisShape === "concept") {
 		      conceptLinkType = thisSourceFile;
 		   }	  
@@ -242,6 +338,7 @@ export function getNodes(query, graphObject, callback) {
 		   nodesAdded[identity2] = 1;
            thisLabel = result.records[i]._fields[2].labels;
            thisShape = result.records[i]._fields[2].properties["shape"];
+		   nodesAddedShape[identity2] = thisShape;
            thisColor = colorTable[thisShape];
            thisSSMId = result.records[i]._fields[2].properties["id"];
            thisSourceFile = result.records[i]._fields[2].properties["sourcefile"];
@@ -250,7 +347,6 @@ export function getNodes(query, graphObject, callback) {
            { id: identity2, shape: thisShape, label: thisLabel, color: thisColor,
              name:  thisTargetName, ssmId: thisSSMId, sourceFile: thisSourceFile, visibility: true
            }
-		   node2Shape = thisShape;
 		   if (thisShape === "concept") {
 		      conceptLinkType = thisSourceFile;
 		   }	  
@@ -267,10 +363,9 @@ export function getNodes(query, graphObject, callback) {
 		 var theLinkType = path.basename(thisSourceFile, 'json');
 
 		 // We change the color and link name if a concept node is involved
-		 if (node1Shape === "concept" || node2Shape === "concept") {
+		 if (nodesAddedShape[identity1] === "concept" || 
+		     nodesAddedShape[identity2] === "concept") {
 		    linkColor = colorTable["conceptLink"];
-			node1Shape = "";
-			node2Shape = "";
 			theLinkType = conceptLinkType;
 		 }
 		 var thisLink = {

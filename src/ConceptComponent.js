@@ -30,7 +30,7 @@ export default class ConceptComponent extends React.Component {
 	 this.theOptions =[
         {value: "new", label: "Add A New Concept"},
         {value: "link", label: "Link Selected Concept"},
-        {value: "deleteConcept", label: "Delete SelectedConcept"},
+        {value: "deleteConcept", label: "Delete Selected Concept"},
         {value: "deleteLink", label: "Delete Selected Link"},
         {value: "save", label: "Save All Concepts and Links"}
 	 ]

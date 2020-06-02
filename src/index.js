@@ -500,6 +500,7 @@ render() {
 	  // most common time this will happen is when a concept node has been added and there are no links
 	  // to it.
 	  this.orphanQuery = 'MATCH (n:`LABEL`) WHERE NOT (n)-[*]-() and n.shape <> "noBorder" and n.sourcefile = "MAP" RETURN n';
+	  this.singleNodeQuery = 'MATCH (n:`LABEL`) WHERE  n.id = ID and n.sourcefile = "MAP" RETURN n';
       this.mapQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE RETURN n,type(r),a';
 
       // QUeries used in the view menu to select a subset of rings to view. Note that these
@@ -533,6 +534,8 @@ render() {
       this.handleConceptPopupChange = this.handleConceptPopupChange.bind(this);
       this.handleConceptMapChange = this.handleConceptMapChange.bind(this);
       this.handleConceptChange = this.handleConceptChange.bind(this);
+      this.getNodeCallback = this.getNodeCallback.bind(this);
+      this.writeNodeCallback = this.writeNodeCallback.bind(this);
       this.triggerRender = this.triggerRender.bind(this);
       this.setMapData = this.setMapData.bind(this);
       this.addConceptNode = this.addConceptNode.bind(this);
@@ -583,15 +586,40 @@ render() {
  * @return {None}
  */
   addConceptNode (theNode) {
-     this.graph.appendNodeAndLink(theNode, null);
+ //    this.graph.appendNodeAndLink(theNode, null);
      const graphDataFunctions = require('./graphDataFunctions');
-	 graphDataFunctions.writeANode(theNode, this.readyToRender);
+	 graphDataFunctions.writeANode(theNode, this.writeNodeCallback);
+ return;
 
      console.log("in addConceptNode: ", theNode);
      this.setState({
        conceptNodes: [...this.state.conceptNodes, theNode]
      })
   }   
+
+/**
+ * Callback function to pass to getSingleNode.
+ * @param  {Object} the node retireved from the database
+ * @return {None}
+ */
+  writeNodeCallback (theNode) {
+     var realQuery = this.singleNodeQuery.replace("LABEL", this.state.selectedLabel).replace("MAP", this.state.selectedConceptMapOption.value).replace("ID", theNode.id);
+	 console.log("realQuery in writeNodeCallback", realQuery);
+     graphDataFunctions.getSingleNode(realQuery, this.getNodeCallback);
+  }
+
+/**
+ * Callback function to pass to getSingleNode.
+ * @param  {Object} the node retireved from the database
+ * @return {None}
+ */
+  getNodeCallback (theNode) {
+ //    this.graph.appendNodeAndLink(theNode, null);
+     console.log("in getNodeCallback: ", theNode);
+     theNode.visibility = true;
+     this.graph.appendNodeAndLink(theNode, null);
+     this.triggerRender(true);
+  }
 
 /**
  * Function to create the ConceptComponent.  It's called when the user has selected 
@@ -643,8 +671,12 @@ render() {
 
      var linkLength = this.state.conceptLinks.length;
      for (i = 0; i < linkLength; i++) {
-         console.log("appending link: ", this.state.conceptLinks[i]);
-         this.graph.appendNodeAndLink(null, this.state.conceptLinks[i]);
+         if (this.state.conceptLinks[i].zombie === false) {
+            // A zombie link has been removed from the database, but the 
+            // database may not have been re-read before this render.
+            console.log("appending link: ", this.state.conceptLinks[i]);
+            this.graph.appendNodeAndLink(null, this.state.conceptLinks[i]);
+         }
      }    
 
     console.log("calling this.filterNodesAndLinks with: ", 
@@ -850,7 +882,9 @@ render() {
            targetNode = this.graph.links[i].target;
 		}
         console.log("filtering links: source node:" , sourceNode);
-        if (filteredNodes[sourceNode] === 1 || filteredNodes[targetNode] === 1){
+        if (filteredNodes[sourceNode] === 1 || 
+            filteredNodes[targetNode] === 1 ||
+            this.graph.links[i].zombie === true ){
            console.log("setting visibility for link: ", i);
            this.graph.links[i].visibility = false;
         } else { 
@@ -943,10 +977,46 @@ render() {
  */
    handleLinkClick(link, event) {
 
-     alert("Link name: " + link.name + "\n" + 
-           "Source: " + link.sourceName + "\n" +
-           "Target: " + link.targetName);
-   };
+     const graphDataFunctions = require('./graphDataFunctions');
+     console.log(`In handleLinkClick with node: `, link);
+     console.log(`In handleLinkClick with event: `, event);
+     console.log(`In handleLinkClick with selectedConceptOption: `,
+                  this.state.selectedConceptOption);
+     if ( this.state.selectedConceptOption.value === "deleteLink") {
+        if (link.source.shape === "concept") {
+          var confirmText =
+               "Deleting link " + link.name + 
+               " from node " + link.sourceName + 
+               " to " + link.targetName;
+          if (window.confirm(confirmText)) {
+             console.log(confirmText);
+             link.visibility = false;
+
+             // Mark this link as a zombie so it doesn't get rendered.
+             link.zombie = true;
+             const graphDataFunctions = require('./graphDataFunctions');
+             graphDataFunctions.deleteALink(link.source, link.target, this.triggerRender);
+          }
+       } else {
+         alert("Only concept links may be deleted");
+       }
+     } else {
+        alert("Link name: " + link.name + "\n" + 
+              "Source: " + link.sourceName + "\n" +
+              "Target: " + link.targetName);
+   } 
+};
+
+/**
+ * Callback function to pass to deleteALink
+ * @param  {boolean} true or false, ignored currently
+ * @return {None}
+ */
+  deleteLinkCallback (val) {
+ //    this.graph.appendNodeAndLink(theNode, null);
+     console.log("in deleteLinkCallback: ", val);
+     this.triggerRender(true);
+  }
 
 /**
  * The on click handler
@@ -1349,6 +1419,7 @@ render() {
  * @return {None}
  */
    handleConceptChange(selectedConceptOption) {
+     this.triggerRender(true);
      console.log(`In handleConceptChange `, selectedConceptOption);
 
      this.setState(
