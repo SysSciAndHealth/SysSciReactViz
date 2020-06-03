@@ -666,7 +666,11 @@ render() {
      console.log(`In triggerRender `);
      var nodeLength = this.state.conceptNodes.length;
      for (var i = 0; i < nodeLength; i++) {
-         this.graph.appendNodeAndLink(this.state.conceptNodes[i], null);
+         if (this.state.conceptNodes[i].zombie === false) {
+            // A zombie node has been removed from the database, but the 
+            // database may not have been re-read before this render.
+            this.graph.appendNodeAndLink(this.state.conceptNodes[i], null);
+		 }
      }    
 
      var linkLength = this.state.conceptLinks.length;
@@ -855,7 +859,8 @@ render() {
         if (this.graph.nodes[i].shape === "concept") {
            var conceptMapForThisNode = this.graph.nodes[i].sourceFile;
            if (showConceptNodes && 
-               conceptMapForThisNode === selectedConceptMapOption.value) {
+               conceptMapForThisNode === selectedConceptMapOption.value &&
+			   this.graph.nodes[i].zombie !== true) {
               this.graph.nodes[i].visibility = true;
               filteredNodes[this.graph.nodes[i].id] = 0;
            } else {   
@@ -1033,19 +1038,35 @@ render() {
                   this.state.selectedConceptOption);
      if (this.state.selectedNode.shape === "concept" && 
          this.state.selectedConceptOption.value === "link") {
+		// The user wants to link this node to another node.
         if (this.state.selectedNode.id === node.id) {
+		   // You can't link a node to itself
            alert("Linking node to itself is not allowed");
            return;
         }  else {
            var confirmText = 
              "Linking node " + node.name + " with node " + this.state.selectedNode.name;
            if (window.confirm(confirmText)) {
+		      // The user actually wants to make the link
               console.log(confirmText);
               const graphDataFunctions = require('./graphDataFunctions');
 		      graphDataFunctions.writeALink(this.state.selectedNode, node, null);
               this.addConceptLink(this.state.selectedNode, node);
            }
         }
+	 } else if (this.state.selectedNode.shape === "concept" &&
+	          this.state.selectedConceptOption.value === "deleteConcept") {
+		// The user wants to delete this node.  Note they can only delete concept nodes
+		// Do we want to alert?
+       var confirmText = "Deleting node " + node.name + " and all it's links";
+       if (window.confirm(confirmText)) {
+          console.log(confirmText);
+		  // Mark this node as a zombie to prevent rendering before the database
+		  // is re-read
+		  this.state.selectedNode.zombie = true;
+          const graphDataFunctions = require('./graphDataFunctions');
+	      graphDataFunctions.deleteANode(this.state.selectedNode, this.triggerRender);
+       }
      } else {
         alert("Node name: " + node.name + "\n" + "Node type: " + type);
      }

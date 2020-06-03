@@ -31,8 +31,7 @@ export default class ConceptComponent extends React.Component {
         {value: "new", label: "Add A New Concept"},
         {value: "link", label: "Link Selected Concept"},
         {value: "deleteConcept", label: "Delete Selected Concept"},
-        {value: "deleteLink", label: "Delete Selected Link"},
-        {value: "save", label: "Save All Concepts and Links"}
+        {value: "deleteLink", label: "Delete Selected Link"}
 	 ]
   }
 
@@ -79,8 +78,6 @@ export default class ConceptComponent extends React.Component {
     }   
 
 	this.props.handleConceptChange(selectedOption);
-
-    //this.props.handleSortChange(selectedOptions);
   }
 
 /**

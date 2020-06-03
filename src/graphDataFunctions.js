@@ -105,7 +105,37 @@ export function deleteALink(sourceNode, targetNode, callback) {
     });
 }
 
+/**
+ * This function deletes a single nodes from the database. It's used when the user.
+ * deletes a  concept node. It also deletes all of the relationships attached to the node.
+ * @param  {Object} the node to delete
+ * @param  {Function} the callback function to execute when the data is ready to render
+ * @return {None}
+ */
+export function deleteANode(thisNode, callback) {
+    console.log("deleteANode: thisNode is: ", thisNode);
 
+    // Pull the connection info from the ,env file.  Copy and change template.env
+    const neo4j = require('neo4j-driver');
+    const driver = neo4j.driver(process.env.REACT_APP_BOLT_URL,
+                                 neo4j.auth.basic(process.env.REACT_APP_BOLT_USER,
+                                 process.env.REACT_APP_BOLT_PASSWORD));
+    const session = driver.session({defaultAccessMode: neo4j.session.WRITE});
+
+    const deleteResult = session.writeTransaction(async txc => {
+       var theQuery = 'Match (n:`LABEL`)  where id(n) = ID DETACH DELETE n';
+	   var realQuery = theQuery.replace("LABEL", thisNode.label[0]).replace("ID", thisNode.id);
+       console.log("deleteANode: realQuery is: ", realQuery);
+       var result = await txc.run(realQuery);
+    });
+    deleteResult.then(result => {
+       // Now we call the callback so that the parent component knows the data is ready to render.
+       if (typeof callback === "function") {
+           callback(thisNode);
+       }
+    });
+
+}
 
 /**
  * This function writes a single nodes to the database. It's used when the user.
