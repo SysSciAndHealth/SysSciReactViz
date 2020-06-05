@@ -479,7 +479,7 @@ render() {
          conceptNodes: [],
          conceptLinks: [],
          readyToRender: 'false',
-         selectedLabel: 'test',
+         selectedLabel: '',
          selectedViewOption: '',
          selectedPopupOption: 'test',
          selectedConceptPopupOption: 'test',
@@ -854,7 +854,7 @@ render() {
      // One more thing: we want to handle conceptNodes. They are turned off or on 
      // with the showConceptNodes flag: This needs to be updated to handle the 
      // "Concept Maps"
-     console.log("filtering concepts for map: ", selectedConceptMapOption);
+ //  console.log("filtering concepts for map: ", selectedConceptMapOption);
      for (i = 0; i < this.graph.nodes.length; i++) {
         if (this.graph.nodes[i].shape === "concept") {
            var conceptMapForThisNode = this.graph.nodes[i].sourceFile;
@@ -886,7 +886,7 @@ render() {
            sourceNode = this.graph.links[i].source;
            targetNode = this.graph.links[i].target;
 		}
-        console.log("filtering links: source node:" , sourceNode);
+//      console.log("filtering links: source node:" , sourceNode);
         if (filteredNodes[sourceNode] === 1 || 
             filteredNodes[targetNode] === 1 ||
             this.graph.links[i].zombie === true ){

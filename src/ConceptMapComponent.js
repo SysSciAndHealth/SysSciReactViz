@@ -20,15 +20,15 @@ export default class ConceptMapComponent extends React.Component {
      this.state = {
         conceptMaps: [],
         selectedOption: [],
-        conceptMapQuery: 'MATCH (n) where n.shape = "concept" RETURN distinct n.sourcefile, labels(n)'
+		addMapsFromDatabase: true
      };
 
-     this.theOptions = [];
- //  this.state.conceptMaps[this.props.label] = {};
- //  this.state.conceptMaps[this.props.label]["maps"] = {value: "none", label: "none"};
+     this.theOptions = [{value: "new", label: "Add A New Concept Map"}];
+     this.conceptMapQuery = 
+	    'MATCH (n) where n.shape = "concept" RETURN distinct n.sourcefile, labels(n)'
      this.handleConceptMapsChange = this.handleConceptMapsChange.bind(this);
      const graphDataFunctions = require('./graphDataFunctions');
-     graphDataFunctions.getMaps(this.state.conceptMapQuery, this);
+     graphDataFunctions.getMaps(this.conceptMapQuery, this);
   }
 
 /**
@@ -55,11 +55,14 @@ export default class ConceptMapComponent extends React.Component {
   handleConceptMapsChange(selectedOption) {
     console.log("Concept map selected: ", selectedOption);
     var newConceptMapName;
+	var newMap = false;
+	var userOption = {};
 
     if (selectedOption.value === "new") {
        newConceptMapName = prompt("Enter the name of the new concept map");
-       selectedOption.value = newConceptMapName;
-       selectedOption.label = newConceptMapName;
+       userOption.value = newConceptMapName;
+       userOption.label = newConceptMapName;
+       this.theOptions = [...this.theOptions, userOption];
     }   
 
     this.props.handleConceptMapChange(selectedOption);
@@ -87,18 +90,20 @@ export default class ConceptMapComponent extends React.Component {
 
     // This seems to catch the case where we are trying to render this component before we
     // have the map data from the promise.
-	this.theOptions = [];
-    this.theOptions[0] = {value: "new", label: "Add A New Concept Map"};
     if (this.state.conceptMaps[this.props.label] !== undefined 
-	    && this.state.conceptMaps.length !== 0) {
+	    && this.state.conceptMaps.length !== 0
+		&& this.state.addMapsFromDatabase === true) {
+	   // Make sure the database maps are only added once.  We can't do this at init time
+	   // because the lable has not yet been set.
        this.theOptions = this.theOptions.concat(this.state.conceptMaps[this.props.label]["maps"]);
+	   this.setState(
+	      { addMapsFromDatabase: false}
+	   );	  
     }
 
     if (typeof this.handleChange !== "function") {
 	   return null;
 	}
-    console.log("Rendering the concept map  component with label: ", this.props.label);
-    console.log("Rendering the concept map  component with options: ", this.theOptions);
 
     // The very cool select widget.  It returns a possibly empty array of user selected values.
     return (
