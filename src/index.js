@@ -213,7 +213,7 @@ class SelectViewComponent extends React.Component {
  */
   constructor (props) {
   super (props);
-     //nsole.log("In constructor for SelectViewComponent");
+     //console.log("In constructor for SelectViewComponent");
 
      this.state = {
         selectedOption: 'All Nodes',
@@ -227,6 +227,7 @@ class SelectViewComponent extends React.Component {
         { value: 'needs', label: 'Needs'},
         { value: 'resources', label: 'Resources'},
         { value: 'wishes', label: 'Wishes'},
+        { value: 'concepts', label: 'Concept Nodes'},
         ];
 
 
@@ -503,14 +504,6 @@ render() {
 	  this.singleNodeQuery = 'MATCH (n:`LABEL`) WHERE  n.id = ID and n.sourcefile = "MAP" RETURN n';
       this.mapQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE RETURN n,type(r),a';
 
-      // QUeries used in the view menu to select a subset of rings to view. Note that these
-      // queries are set up to always show at least the responsibilities nodes and the complete path
-      // to get there
-//    this.viewDyadQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE a.shape = "rectangle" RETURN n,type(r),a';
-//    this.viewAllNodeQuery = 'MATCH (n:`LABEL`)-[r]->(a) MAPCLAUSE RETURN n,type(r),a';
-//    this.viewPathQuery ='MATCH p = (b)-[*0..]->(n:`LABEL`)-[*0..]->(a) MAPCLAUSE  a.shape = "SHAPE" and b.shape = "rectangle" RETURN p';
-
-
       // Queries for the popup menu
       this.popupRoleQuery = 'MATCH (n:`LABEL`)-[r]->(a) where a.shape = "rectangle" and n.sourcefile = "SOURCEFILE" RETURN n,type(r),a';
       this.popupNeighborQuery = 'MATCH (n:`LABEL`)-[r]->(a) where n.sourcefile = "SOURCEFILE" and (n.id = ID or a.id = ID) RETURN n,type(r),a';
@@ -709,7 +702,7 @@ render() {
   }
 
 /**
- * Is this node in one of the user selected maps.  If so, retrun true, otherwise false.
+ * Is this node in one of the user selected maps.  If so, return true, otherwise false.
  * @param  {String} The node to check
  * @param  {Array}  The array of user selected maps.
  *                 
@@ -755,16 +748,22 @@ render() {
      console.log("length of node array: ", this.graph.nodes.length);
      console.log("selectedMaps of node array: ", this.state.selectedMaps);
      console.log("selectedViewOption: ", selectedViewOption);
+     console.log("selectedNode: ", this.state.selectedNode);
      console.log("***************************");
      var filteredNodes = {};
+     var conceptLinkedNodes = {};
      var i = 0;
      if (selectedViewOption !== undefined && 
         selectedViewOption !==  null && selectedViewOption.length !== 0) {
         // No view filtering has been asked for, let's not do any.
 
        // Start with filtering by selectedView
-       switch (selectedViewOption) {
+	   // Note that the isNodeInMapList function detemines whether or not the node
+	   // is in a map currently selected for display by the Select Maps component.
+	   console.log("selectedViewOption 0: ", selectedViewOption);
+       switch (selectedViewOption.value) {
            case "all":
+	           console.log("selectedValue 1: ", selectedViewOption.value);
                for (i = 0; i < this.graph.nodes.length; i++) {
                  if (this.isNodeInMapList(this.graph.nodes[i], this.state.selectedMaps)) {
                     this.graph.nodes[i].visibility = true;
@@ -774,15 +773,11 @@ render() {
                     filteredNodes[this.graph.nodes[i].id] = 1;
                  }
                }
-   /*
-               for (i = 0; i < this.graph.links.length; i++) {
-                 this.graph.links[i].visibility = true;
-               }
-   */
                break;
    
            case "roles":
            case "responsibilities":
+	           console.log("selectedValue 2: ", selectedViewOption.value);
                for (i = 0; i < this.graph.nodes.length; i++) {
                   if ((this.graph.nodes[i].shape !== "circle" && 
                       this.graph.nodes[i].shape !== "rectangle") || 
@@ -798,6 +793,7 @@ render() {
                break;
    
            case "needs":
+	           console.log("selectedValue 3: ", selectedViewOption.value);
                for (i = 0; i < this.graph.nodes.length; i++) {
                   if ((this.graph.nodes[i].shape !== "diamond" && 
                       this.graph.nodes[i].shape !== "rectangle") ||
@@ -813,6 +809,7 @@ render() {
                break;
    
            case "resources":
+	           console.log("selectedValue 4: ", selectedViewOption.value);
                for (i = 0; i < this.graph.nodes.length; i++) {
                   if ((this.graph.nodes[i].shape !== "diamond" && 
                       this.graph.nodes[i].shape !== "ellipse" && 
@@ -829,6 +826,7 @@ render() {
                 break;
    
            case "wishes":
+	           console.log("selectedValue 5: ", selectedViewOption.value);
                for (i = 0; i < this.graph.nodes.length; i++) {
                   if ((this.graph.nodes[i].shape !== "diamond" && 
                       this.graph.nodes[i].shape !== "ellipse" && 
@@ -845,19 +843,83 @@ render() {
                }    
                break;
    
+           case "concepts":
+               console.log("selectedValue 6: ", selectedViewOption.value);
+               // If there is no selected node, or the selected node is not a 
+               // concept we don't care
+               if (this.state.selectedNode !== "" &&
+                   this.state.selectedNode.shape === "concept") {
+//                // Start by turning off all the nodes.
+//                for (i = 0; i < this.graph.nodes.length; i++) {
+//                   this.graph.nodes[i].visibility = false;
+//                   filteredNodes[this.graph.nodes[i].id] = 1;
+//                }
+                  // Now look at all the links. Turn on any node that is linked to the
+                  // selected concept,
+                  var source;
+                  var target;
+                  var linkedNode;
+                  for (i = 0; i < this.graph.links.length; i++) {
+                      // OK, so this is a bit weird.  Because the react force 3d rendering
+                      // can change the value of what is rendered, the links can be in 2 forms.
+                      // Rather than argue about it, we handle either case. Strange but it works.
+                      if (this.graph.links[i].source.id !== undefined) {
+                         source = this.graph.links[i].source.id;
+                         target = this.graph.links[i].target.id;
+                      } else {
+                         source = this.graph.links[i].source;
+                         target = this.graph.links[i].target;
+                      }
+                      if ((source === this.state.selectedNode.id) ||
+                          (target === this.state.selectedNode.id)) {
+                          linkedNode = (source === this.state.selectedNode.id) ? target : source
+						  // This is the array of node ids that are linked to the selected node.
+                          conceptLinkedNodes[linkedNode] = 1;
+                          console.log("adding to conceptLinkedNodes ", linkedNode)
+                      }
+                  }
+
+				  // Now we go through all of the nodes setting the visibility of all of the
+				  // nodes that are both in the mapped list and in the conceptLinked nodes
+				  // to true
+                  for (i = 0; i < this.graph.nodes.length; i++) {
+                    if (this.isNodeInMapList(this.graph.nodes[i], this.state.selectedMaps)) {
+					   // The node is in a visible map. Is it linked to the selected concept node? 
+					   if (conceptLinkedNodes[this.graph.nodes[i].id] == 1) {
+					      // Yes:  Make sure the node is visible
+                          this.graph.nodes[i].visibility = true;
+                          filteredNodes[this.graph.nodes[i].id] = 0;
+                       } else {
+                          // No: turn off the node
+                          this.graph.nodes[i].visibility = false;
+                          filteredNodes[this.graph.nodes[i].id] = 1;
+					   }
+                    }
+                 }
+               }
+			   break;
+
            default:
-               console.log ("unsupported view option: " + selectedViewOption);
-               return;
+	           console.log("selectedValue 7: ", selectedViewOption.value);
+               console.log ("unsupported view option: " , selectedViewOption);
+               break;
        }
      }
 
      // One more thing: we want to handle conceptNodes. They are turned off or on 
      // with the showConceptNodes flag: This needs to be updated to handle the 
      // "Concept Maps"
- //  console.log("filtering concepts for map: ", selectedConceptMapOption);
+     console.log("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&");
+     console.log("filtering concepts for map: ", selectedConceptMapOption);
+     console.log("filteredNodes: ", filteredNodes);
+     console.log("showConceptNodes: ", showConceptNodes);
+     console.log("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&");
      for (i = 0; i < this.graph.nodes.length; i++) {
         if (this.graph.nodes[i].shape === "concept") {
            var conceptMapForThisNode = this.graph.nodes[i].sourceFile;
+           console.log("node: ", this.graph.nodes[i]);
+           console.log("conceptMapForThisNode: ", conceptMapForThisNode);
+           console.log("zombie: ", this.graph.nodes[i].zombie);
            if (showConceptNodes && 
                conceptMapForThisNode === selectedConceptMapOption.value &&
 			   this.graph.nodes[i].zombie !== true) {
@@ -876,7 +938,7 @@ render() {
 	 var sourceNode;
 	 var targetNode;
      for (i = 0; i < this.graph.links.length; i++) {
-		// OK, so this is abit weird.  Because the react force 3d rendering
+		// OK, so this is a bit weird.  Because the react force 3d rendering
 		// can change the value of what is rendered, the links can be in 2 forms here.
 		// Rather than argue about it, we just handle either case. Strange but it works.
 		if (this.graph.links[i].source.id !== undefined) {
@@ -914,67 +976,6 @@ render() {
    }
 
 
-   // This code will eventually be removed (I think: if I was sure it would be gone now!)
-   /*
-   getNodeDataFromSelectViewChange2(selectedViewOption) {
-     console.log(`In getNodeDataFromSelectViewChange `, selectedViewOption);
-
-     var theQuery;
-     // Create the query depending on what the user's selected.
-     var mapClause = this.buildSelectedMapClause(this.state.selectedMaps);
-     if (mapClause !== "") {
-        mapClause = mapClause.concat(" and ");
-     } else {
-        mapClause = " where";
-     }
-     console.log ("map clauses: " + mapClause);
-
-     /* This case statement could easily be confusing.  The point of this code is to present a set
-      * of nodes for viewing/sorting by ring. The user always wants to see the Responsibilities.
-      * If the user is viewing either the Roles or Responsibilities, we show both of those rings for some
-      * context. But if the user is viewing one of the "outer rings" we show all of the nodes in the
-      * full path to the Responsibilities.  This requires a different query, and a different function to
-      * retrieve the nodes from the database.
-      
-     const graphDataFunctions = require('./graphDataFunctions');
-     switch (selectedViewOption.value) {
-         case "all":
-             theQuery = this.nodeQuery.replace("LABEL", this.state.selectedLabel);
-             graphDataFunctions.getNodes(theQuery, this.graph, this.triggerRender);
-             break;
-
-         case "roles":
-         case "responsibilities":
-             theQuery = this.viewDyadQuery.replace("LABEL", this.state.selectedLabel).replace("MAPCLAUSE", mapClause);
-             graphDataFunctions.getNodes(theQuery, this.graph,  this.triggerRender);
-             break;
-
-//             theQuery = this.ringQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "rect
-//             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
-//             break;
-
-         case "needs":
-             theQuery = this.viewPathQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "diamond").replace("MAPCLAUSE", mapClause);
-             graphDataFunctions.getNodesFromPath(theQuery, this.graph, this.triggerRender);
-             break;
-
-         case "resources":
-             theQuery = this.viewPathQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "ellipse").replace("MAPCLAUSE", mapClause);
-             graphDataFunctions.getNodesFromPath(theQuery, this.graph,  this.triggerRender);
-              break;
-
-         case "wishes":
-             theQuery = this.viewPathQuery.replace("LABEL", this.state.selectedLabel).replace("SHAPE", "star").replace("MAPCLAUSE", mapClause);
-             graphDataFunctions.getNodesFromPath(theQuery, this.graph,  this.triggerRender);
-             break;
-
-         default:
-             console.log ("unsupported view option: " + selectedViewOption.value);
-     }
-     console.log ("theQuery: " + theQuery);
-
-   };
-*/
 /**
  * The on link click handler
  * @param  {Object} the node object that was clicked on.
@@ -1063,7 +1064,12 @@ render() {
           console.log(confirmText);
 		  // Mark this node as a zombie to prevent rendering before the database
 		  // is re-read
-		  this.state.selectedNode.zombie = true;
+		  var dummySelectedNode = {...this.state.selectedNode}
+		  dummySelectedNode.zombie = true
+		  this.setState(prevState => ({
+             selectedNode: dummySelectedNode
+          }));
+//  this.state.selectedNode.zombie = true;
           const graphDataFunctions = require('./graphDataFunctions');
 	      graphDataFunctions.deleteANode(this.state.selectedNode, this.triggerRender);
        }
@@ -1292,8 +1298,13 @@ render() {
      // Call the getNodeDataFromSelectViewChange function to build the correct query 
      // and make the getNodes call.
      this.getNodeDataFromSelectViewChange(selectedViewOption)
+     var showConceptNodes = false;
+     if (selectedViewOption.value === "all" || selectedViewOption.value === "concepts") {
+        showConceptNodes = true;
+     }
+
      this.filterNodesAndLinks(selectedViewOption,
-                              this.state.selectedConceptMapOption, false);
+                              this.state.selectedConceptMapOption, showConceptNodes);
      this.setState(
        { selectedViewOption: selectedViewOption.value},
      );
@@ -1395,21 +1406,6 @@ render() {
        { selectedMaps: selectedMaps}
      );
    };
-
-/**
- * Keep track of mouse movements so we can plce the popup menu
- */
-  _onMouseMove(e) {
-      console.log("setting mouse state: ", e);
-      this.setState({
-         popupDiv:{
-            padding: 5000,
-            top:e.screenY + 'px' ,
-            left:e.screenX + 'px' ,
-            position: 'absolute'
-         }
-     })
-  }
 
 /**
  * Function passed to the ConceptMap component. Function is bound to this context so

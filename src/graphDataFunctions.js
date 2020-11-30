@@ -41,10 +41,8 @@ export function writeALink(sourceNode, targetNode, callback) {
                                  process.env.REACT_APP_BOLT_PASSWORD));
     const session = driver.session({defaultAccessMode: neo4j.session.WRITE});
 
-    var i;
     var thisLabel = targetNode.label[0];
 	var theQuery;
-    var linkToInsert;
 	var linkQuery = 'MATCH (c:`LABEL`),(n:`LABEL` ) where id(c)  = C_ID and id(n) = N_ID MERGE (c)-[r:`REL`]->(n)';
 	theQuery = linkQuery.replace(/LABEL/g, thisLabel)
                         .replace("C_ID", sourceNode.id)
@@ -80,10 +78,8 @@ export function deleteALink(sourceNode, targetNode, callback) {
                                  process.env.REACT_APP_BOLT_PASSWORD));
     const session = driver.session({defaultAccessMode: neo4j.session.WRITE});
 
-    var i;
     var thisLabel = targetNode.label[0];
     var theQuery;
-    var linkToInsert;
     var linkQuery = 
 'MATCH (c:`LABEL` )-[r:`REL`]->(n:`LABEL`) where id(c) = C_ID and id(n) = N_ID DELETE r';
     theQuery = linkQuery.replace(/LABEL/g, thisLabel)
@@ -153,7 +149,6 @@ export function writeANode(thisNode, callback) {
                                  process.env.REACT_APP_BOLT_PASSWORD));
     const session = driver.session({defaultAccessMode: neo4j.session.WRITE});
 
-    var i;
     var thisLabel;
     var nodeToInsert;
 
@@ -257,7 +252,6 @@ export function getSingleNode(query, callback) {
                                  process.env.REACT_APP_BOLT_PASSWORD));
     const session = driver.session();
     const nodeResult = session.run(query);
-    var path = require('path');
     console.log("query in getSingleNode is: " + query);
 
     nodeResult.then(result => {
