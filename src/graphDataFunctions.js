@@ -622,7 +622,7 @@ export function getMaps(query, mapObject) {
     var maps = [];
     var mapsByLabel = {};
     var path = require('path');
-    console.log("n getMaps with query: " + query);
+    console.log("in getMaps with query: " + query);
 
     mapResult.then(result => {
        var nRecords = result.records.length;
@@ -662,6 +662,72 @@ export function getMaps(query, mapObject) {
 //    if (typeof callback === "function") {
 //        callback('true');
 //    }
+  });
+}
+
+
+/**
+ * This function retrieves the list of concepts for a label in the Neo4j database. 
+ * We use a java script promise to handle the asynchronous nature of the query. In the then clause, we
+ * construct an array of concepts that eventually get added to the inputed map object. 
+ * @param  {String} the query to execute
+ * @param  {Object} the map object
+ * @return {None}
+ */
+export function getConcepts(query, mapObject) {
+	
+    // Pull the connection info from the ,env file.  Copy and change template.env
+    const neo4j = require('neo4j-driver');
+    const driver = neo4j.driver(process.env.REACT_APP_BOLT_URL,
+                                 neo4j.auth.basic(process.env.REACT_APP_BOLT_USER, 
+                                 process.env.REACT_APP_BOLT_PASSWORD));
+    const session = driver.session();
+    console.log(query);
+    const mapResult = session.run(query)
+    var concepts = [];
+    var conceptsByLabel = {};
+    var path = require('path');
+    console.log("in getConcepts with query: " + query);
+
+    mapResult.then(result => {
+       var nRecords = result.records.length;
+       console.log("number of concepts found is: " + nRecords);
+       for (var i = 0; i < nRecords; i++) {
+	       console.log("This record in getConcepts ", result.records[i]);
+	       console.log("This properties record", result.records[i]._fields[0].properties);
+           var thisConcept = { sourceFile: result.records[i]._fields[0].properties["sourcefile"], 
+                           name: (result.records[i]._fields[0].properties["name"]), 
+						   shape: "concept",
+                           label: result.records[i]._fields[0].labels[0]};
+           concepts.push(thisConcept);
+       }
+
+    // We currently have an array of objects that have all of the  attributes. What we actually
+    // want is an array of objects with a label attribute, where each of these objects contains 
+    // objects with the rest of the fields
+    for (i = 0; i < concepts.length; i++) {
+       var retrievedConcept = concepts[i];
+       var thisConceptToInsert = {value: retrievedConcept.sourceFile, 
+	                              label: retrievedConcept.label,
+	                              name: retrievedConcept.name,
+								  shape: retrievedConcept.shape};
+       var thisLabel = retrievedConcept.label;
+       if (conceptsByLabel.hasOwnProperty(retrievedConcept.label)){
+         // Not the first time we have seen this label
+         conceptsByLabel[thisLabel].maps.push(thisConceptToInsert);
+       } else {
+         conceptsByLabel[thisLabel] = {};
+         conceptsByLabel[thisLabel].maps = [];
+         conceptsByLabel[thisLabel].maps.push(thisConceptToInsert);
+       }
+  
+    }
+
+    console.log("conceptsByLabel: ", conceptsByLabel);
+    session.close();
+    driver.close();
+    console.log("First concept to return " , concepts[0]);
+    mapObject.setMaps(conceptsByLabel);
   });
 }
 

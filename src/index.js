@@ -22,6 +22,7 @@ import Select from 'react-select';
 import ConceptMapComponent from './ConceptMapComponent.js'
 import ConceptComponent from './ConceptComponent.js'
 import ConceptPopupComponent from './ConceptPopupComponent.js'
+import ConceptSelectComponent from './ConceptSelectComponent.js'
 
 /**
  * This is the container for the select label menu 
@@ -476,6 +477,7 @@ render() {
             },
          labels: [],
          selectedMaps: [],
+         selectedConcepts: [],
          maps: {},
          conceptNodes: [],
          conceptLinks: [],
@@ -485,6 +487,7 @@ render() {
          selectedPopupOption: 'test',
          selectedConceptPopupOption: 'test',
          selectedConceptMapOption: {value: "none", label: "none"},
+         selectedConceptSelectOption: {value: "none", label: "none"},
          selectedConceptOption: 'new',
          showPopup: false,
          showConceptPopup: false,
@@ -526,7 +529,9 @@ render() {
       this.handlePopupChange = this.handlePopupChange.bind(this);
       this.handleConceptPopupChange = this.handleConceptPopupChange.bind(this);
       this.handleConceptMapChange = this.handleConceptMapChange.bind(this);
+      this.handleConceptSelectChange = this.handleConceptSelectChange.bind(this);
       this.handleConceptChange = this.handleConceptChange.bind(this);
+      this.handleConceptListChange = this.handleConceptListChange.bind(this);
       this.getNodeCallback = this.getNodeCallback.bind(this);
       this.writeNodeCallback = this.writeNodeCallback.bind(this);
       this.triggerRender = this.triggerRender.bind(this);
@@ -584,10 +589,10 @@ render() {
 	 graphDataFunctions.writeANode(theNode, this.writeNodeCallback);
  return;
 
-     console.log("in addConceptNode: ", theNode);
-     this.setState({
-       conceptNodes: [...this.state.conceptNodes, theNode]
-     })
+//   console.log("in addConceptNode: ", theNode);
+//   this.setState({
+//     conceptNodes: [...this.state.conceptNodes, theNode]
+//   })
   }   
 
 /**
@@ -679,7 +684,8 @@ render() {
     console.log("calling this.filterNodesAndLinks with: ", 
                 this.state.selectedViewOption);
     this.filterNodesAndLinks(this.state.selectedViewOption, 
-                             this.state.selectedConceptMapOption, true);
+                             this.state.selectedConceptMapOption, 
+							 this.state.selectedConcepts, true);
 
      this.setState(
        { readyToRender: 'true'},
@@ -709,8 +715,8 @@ render() {
  * @return {Boolean} True if the node is in one of the selected maps, otherwise false.
  */
    isNodeInMapList(node, selectedMaps) {
- //  console.log("isNodeInMapList selectedMaps: ", selectedMaps);
- //  console.log("isNodeInMapList node: ", node);
+     console.log("isNodeInMapList selectedMaps: ", selectedMaps);
+     console.log("isNodeInMapList node: ", node);
      if (selectedMaps === undefined || 
         selectedMaps ===  null || selectedMaps.length === 0) {
            // No maps selected: By default we want to show all maps
@@ -718,16 +724,47 @@ render() {
            return true;
      }
      for (var i = 0; i < selectedMaps.length; i++) {
-  //    console.log("comparing " + node.sourcefile + " to " + selectedMaps[i].value);
+        console.log("comparing " + node.sourcefile + " to " + selectedMaps[i].value);
         if (node.sourceFile === selectedMaps[i].value) {
-   //      console.log("node found returning true  node: ", node);
+           console.log("node found returning true  node: ", node);
            // The node is in a selected map.
            return true;
         }
      }
  
      // If we got here, it wasn't found
-    //onsole.log("node not found returning false  node: ", node);
+     console.log("node not found returning false  node: ", node);
+     return false;
+   }
+
+
+/**
+ * Is this concept one of the user selected concepts.  If so, return true, otherwise false.
+ * @param  {String} The concept to check
+ * @param  {Array}  The array of user selected concepts.
+ *                 
+ * @return {Boolean} True if the node is in one of the selected maps, otherwise false.
+ */
+   isConceptInConceptList(concept, selectedConcepts) {
+     console.log("isConceptInConceptist node: ", concept);
+     console.log("isConceptInConceptist selectedConcepts: ", selectedConcepts);
+     if (selectedConcepts === undefined || 
+        selectedConcepts ===  null || selectedConcepts.length === 0) {
+           // No concepts selected: By default we want to show all concepts
+           // so we return true
+           return true;
+     }
+     for (var i = 0; i < selectedConcepts.length; i++) {
+        console.log("comparing " + concept.sourcefile + " to " + selectedConcepts[i].value);
+        if (concept.name === selectedConcepts[i].value) {
+           console.log("concept found returning true  concept: ", concept);
+           // The concept one of the user selected concepts.
+           return true;
+        }
+     }
+ 
+     // If we got here, it wasn't found
+     console.log("concept not found returning false concept: ", concept);
      return false;
    }
 
@@ -742,13 +779,15 @@ render() {
  *                 
  * @return {None}
  */
-   filterNodesAndLinks(selectedViewOption, selectedConceptMapOption, showConceptNodes) {
+   filterNodesAndLinks(selectedViewOption, selectedConceptMapOption, 
+                       selectedConcepts, showConceptNodes) {
      console.log("***************************");
      console.log(`In filterNodesAndLinks `, selectedViewOption);
      console.log("length of node array: ", this.graph.nodes.length);
      console.log("selectedMaps of node array: ", this.state.selectedMaps);
      console.log("selectedViewOption: ", selectedViewOption);
      console.log("selectedNode: ", this.state.selectedNode);
+     console.log("selectedConcepts: ", selectedConcepts);
      console.log("***************************");
      var filteredNodes = {};
      var conceptLinkedNodes = {};
@@ -849,11 +888,6 @@ render() {
                // concept we don't care
                if (this.state.selectedNode !== "" &&
                    this.state.selectedNode.shape === "concept") {
-//                // Start by turning off all the nodes.
-//                for (i = 0; i < this.graph.nodes.length; i++) {
-//                   this.graph.nodes[i].visibility = false;
-//                   filteredNodes[this.graph.nodes[i].id] = 1;
-//                }
                   // Now look at all the links. Turn on any node that is linked to the
                   // selected concept,
                   var source;
@@ -885,7 +919,7 @@ render() {
                   for (i = 0; i < this.graph.nodes.length; i++) {
                     if (this.isNodeInMapList(this.graph.nodes[i], this.state.selectedMaps)) {
 					   // The node is in a visible map. Is it linked to the selected concept node? 
-					   if (conceptLinkedNodes[this.graph.nodes[i].id] == 1) {
+					   if (conceptLinkedNodes[this.graph.nodes[i].id] === 1) {
 					      // Yes:  Make sure the node is visible
                           this.graph.nodes[i].visibility = true;
                           filteredNodes[this.graph.nodes[i].id] = 0;
@@ -896,7 +930,10 @@ render() {
 					   }
                     }
                  }
-               }
+               } else {
+			      // Let's be nice and mention to the user that they have not selected a concept
+				  alert("No concept selected: select a concept and try again");
+			   }
 			   break;
 
            default:
@@ -913,6 +950,8 @@ render() {
      console.log("filtering concepts for map: ", selectedConceptMapOption);
      console.log("filteredNodes: ", filteredNodes);
      console.log("showConceptNodes: ", showConceptNodes);
+     console.log("option: ", selectedViewOption.value);
+     console.log("selectedNode: ", this.state.selectedNode);
      console.log("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&");
      for (i = 0; i < this.graph.nodes.length; i++) {
         if (this.graph.nodes[i].shape === "concept") {
@@ -920,9 +959,19 @@ render() {
            console.log("node: ", this.graph.nodes[i]);
            console.log("conceptMapForThisNode: ", conceptMapForThisNode);
            console.log("zombie: ", this.graph.nodes[i].zombie);
-           if (showConceptNodes && 
+           console.log("filtered: ", filteredNodes[this.graph.nodes[i].id] );
+		   if (selectedViewOption.value === "concepts" &&
+		       this.state.selectedNode.id !== this.graph.nodes[i].id) {
+			   // We are in "concept mode". We only want to show the
+			   // selected node.
+			  console.log ("turning off ", this.graph.nodes[i])
+              this.graph.nodes[i].visibility = false;
+              filteredNodes[this.graph.nodes[i].id] = 1;
+		   } else if (showConceptNodes && 
                conceptMapForThisNode === selectedConceptMapOption.value &&
+			   this.isConceptInConceptList(this.graph.nodes[i], selectedConcepts) &&
 			   this.graph.nodes[i].zombie !== true) {
+              console.log("turning on node: ", this.graph.nodes[i]);
               this.graph.nodes[i].visibility = true;
               filteredNodes[this.graph.nodes[i].id] = 0;
            } else {   
@@ -1000,7 +1049,6 @@ render() {
 
              // Mark this link as a zombie so it doesn't get rendered.
              link.zombie = true;
-             const graphDataFunctions = require('./graphDataFunctions');
              graphDataFunctions.deleteALink(link.source, link.target, this.triggerRender);
           }
        } else {
@@ -1059,7 +1107,7 @@ render() {
 	          this.state.selectedConceptOption.value === "deleteConcept") {
 		// The user wants to delete this node.  Note they can only delete concept nodes
 		// Do we want to alert?
-       var confirmText = "Deleting node " + node.name + " and all it's links";
+       confirmText = "Deleting node " + node.name + " and all it's links";
        if (window.confirm(confirmText)) {
           console.log(confirmText);
 		  // Mark this node as a zombie to prevent rendering before the database
@@ -1236,7 +1284,6 @@ render() {
      console.log(`In processConceptPopupChange `, selectedConceptPopupOption);
      console.log(`In processConceptPopupChange with node`, this.state.selectedNode);
      console.log(`In processConceptPopupChange with node id`, this.state.selectedNode.ssmId);
-     var theQuery;
      const graphDataFunctions = require('./graphDataFunctions');
 
      // Once the user makes a selection, they are done with the popup. So let's make it go away
@@ -1304,7 +1351,8 @@ render() {
      }
 
      this.filterNodesAndLinks(selectedViewOption,
-                              this.state.selectedConceptMapOption, showConceptNodes);
+                              this.state.selectedConceptMapOption, 
+							  this.state.selectedConcepts, showConceptNodes);
      this.setState(
        { selectedViewOption: selectedViewOption.value},
      );
@@ -1333,7 +1381,8 @@ render() {
      // ensure the re-render happens once the data is all retrieved.
      graphDataFunctions.getNodes(realQuery, this.graph, this.triggerRender);
      this.filterNodesAndLinks(this.state.selectedViewOption, 
-                              this.state.selectedConceptMapOption, true);
+                              this.state.selectedConceptMapOption, 
+							  this.state.selectedConcepts, true);
 
      console.log("setting state in handleSelectLabelChange");
      this.setState(
@@ -1354,6 +1403,7 @@ render() {
 
      var mapClause;
      var newClause;
+     var newAClause;
      
      if (selectedMaps === undefined || selectedMaps ===  null || selectedMaps.length === 0) {
        // If the user hasn't selected any maps, we show them all
@@ -1373,7 +1423,24 @@ render() {
           }
        }
        mapClause = mapClause.concat(")")
-       mapClause = mapClause.concat('or (n.shape = "concept")');
+ //    mapClause = mapClause.concat('or (n.shape = "concept")');
+
+	   // Because there can be concept nodes that are not connected to any
+	   // of the maps the user wants to display we have to check that the 
+	   // the concept nodes are connected to nodes that are in the one of the
+	   // maps that the user wants to select
+       mapClause = mapClause.concat('or (n.shape = "concept" and (');
+       for (i = 0; i < selectedMaps.length; i++) {
+          newAClause = "a.sourcefile = '" + selectedMaps[i].value + "'";
+          if ( i === 0) {
+            // The first clause : just append the condition
+            mapClause = mapClause.concat(newAClause);
+          } else {
+            // Not the first condition: we'll need an or clause
+            mapClause = mapClause.concat(" or ").concat(newAClause);
+          }
+	   }
+	   mapClause = mapClause.concat("))")
      }
      
      return (mapClause);
@@ -1392,6 +1459,7 @@ render() {
      const graphDataFunctions = require('./graphDataFunctions');
 
      var mapClause = this.buildSelectedMapClause(selectedMaps);
+     console.log("mapClause ", mapClause);
      var realQuery = this.mapQuery.replace("LABEL", this.state.selectedLabel).replace("MAPCLAUSE", mapClause);
      console.log("handleSelectMapsChange ", realQuery);
 
@@ -1399,7 +1467,8 @@ render() {
      // ensure the re-render happens once the data is all retrieved.
      graphDataFunctions.getNodes(realQuery, this.graph, this.triggerRender);
      this.filterNodesAndLinks(this.state.selectedViewOption, 
-                              this.state.selectedConceptMapOption, true);
+                              this.state.selectedConceptMapOption, 
+							  this.state.selectedConcepts, true);
 
      console.log("setting state in handleSelectMapsChange");
      this.setState(
@@ -1421,11 +1490,37 @@ render() {
      // Make an appropriate call to get the concept map nodes and link
      // and make the getNodes call.
  //  this.getConceptMapNodesAndLinks(selectedConceptMapOption)
-     this.filterNodesAndLinks(this.state.selectedViewOption, selectedConceptMapOption, true)
+     this.filterNodesAndLinks(this.state.selectedViewOption, 
+	                          selectedConceptMapOption, 
+							  this.state.selectedConcepts, true);
+	 console.log ("setting selectedConceptMapOption to ", selectedConceptMapOption);
      this.setState(
        { selectedConceptMapOption: selectedConceptMapOption},
      );
    };  
+
+/**
+ * Function passed to the ConceptSelect component. Function is bound to this context so
+ * that when it is executed in the lower level component, the state will be changed in the
+ * parent component and we can call the appropriate getNodeData function.
+ * @param  {String} The option returned from the user's choice in the select in the lower
+ *                  level component.
+ * @return {None}
+ */
+   handleConceptSelectChange(selectedConceptSelectOption) {
+     console.log(`In handleConceptSelectChange `, selectedConceptSelectOption);
+
+     // Make an appropriate call to get the concept map nodes and link
+     // and make the getNodes call.
+ //  this.getConceptMapNodesAndLinks(selectedConceptMapOption)
+     this.filterNodesAndLinks(this.state.selectedViewOption, 
+	                          selectedConceptSelectOption, 
+							  this.state.selectedConcepts, true)
+     this.setState(
+       { selectedConceptSelectOption: selectedConceptSelectOption},
+     );
+   };  
+
 
 /**
  * Function passed to the Concept component. Function is bound to this context so
@@ -1443,6 +1538,27 @@ render() {
        { selectedConceptOption: selectedConceptOption},
      );
    };
+
+/**
+ * Function passed to the ConceptSelect component. Function is bound to this context so 
+ * that when it is executed in the lower level component, the state will be changed in the
+ * parent component and we can call the appropriate getNodeData function.
+ * @param  {String} The option array returned from the user's choice in the select in the lower
+ *                  level component.
+ * @return {None}
+ */
+   handleConceptListChange(selectedConcepts) {
+     console.log(`In handleConceptListChange `, selectedConcepts);
+     this.filterNodesAndLinks(this.state.selectedViewOption, 
+                              this.state.selectedConceptMapOption, 
+							  selectedConcepts, true);
+
+     console.log("setting state in handleConceptListChange");
+     this.setState(
+       { selectedConcepts: selectedConcepts}
+     );
+   };
+
 /**
  * This is the render function for the top-level component.
  * The containers are for controls. The SSMGraphData component is the actual graph
@@ -1466,7 +1582,11 @@ render() {
            <Row>
             <Col md="auto" className="header"><h2>Concepts</h2></Col>
             <Col md="auto"><ConceptMapComponent handleConceptMapChange={this.handleConceptMapChange}
-                                                label={this.state.selectedLabel}/></Col>
+			                                    label={this.state.selectedLabel}/></Col>
+            <Col md="auto"><ConceptSelectComponent 
+			                   handleConceptListChange={this.handleConceptListChange}
+                               conceptMap={this.state.selectedConceptMapOption}
+                               label={this.state.selectedLabel}/></Col>
             <Col md="auto"><ConceptComponent label={this.state.selectedLabel} 
                                              link={this.state.selectedLink}
                                              conceptMap={this.state.selectedConceptMapOption}

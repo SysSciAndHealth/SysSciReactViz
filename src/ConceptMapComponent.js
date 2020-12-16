@@ -33,7 +33,7 @@ export default class ConceptMapComponent extends React.Component {
 
 /**
  * Function passed to the getMaps function to set the map array.  In this case we are actually
- * getting sort/comcept map objects but the underlying code is the same
+ * getting sort/concept map objects but the underlying code is the same
  * @param  {Object} the map array
  * @return {None}
  */
